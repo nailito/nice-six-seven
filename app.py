@@ -501,8 +501,8 @@ prochain = en_route_sorted[0] if en_route_sorted else None
 st.markdown("""
 <div class="hero">
     <div class="hero-eyebrow">Weekend du 25 juillet 2026</div>
-    <h1 class="hero-title">On arrive à Nice ☀️</h1>
-    <p class="hero-sub">Suis les arrivées de toute la bande en temps réel</p>
+    <h1 class="hero-title">Nous à Nice ☀️</h1>
+    <p class="hero-sub">Mettez vos trains les zamis</p>
 </div>
 """, unsafe_allow_html=True)
 
