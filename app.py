@@ -42,6 +42,41 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("Cache vidé")
 
+    ast.markdown("---")
+    st.markdown("### 🔧 Debug Journeys")
+    if st.button("Test Journeys Paris→Nice", key="debug_journeys"):
+        try:
+            r = requests.get(
+                f"{SNCF_BASE}/journeys",
+                params={
+                    "from": "stop_area:SNCF:87686006",
+                    "to":   "stop_area:SNCF:87756056",
+                    "datetime": "20260725T060000",
+                    "datetime_represents": "departure",
+                    "count": 3,
+                    "data_freshness": "base_schedule",
+                },
+                auth=(SNCF_API_KEY, ""),
+                timeout=10,
+            )
+            st.write(f"**Status:** `{r.status_code}`")
+            st.write(f"**URL:** `{r.url}`")
+            if r.status_code == 200:
+                data = r.json()
+                journeys = data.get("journeys", [])
+                st.write(f"**Journeys:** {len(journeys)}")
+                if journeys:
+                    # Affiche juste les sections du premier journey
+                    for s in journeys[0].get("sections", []):
+                        st.write(f"- type=`{s.get('type')}` | mode=`{s.get('display_informations', {}).get('commercial_mode', '')}`")
+                else:
+                    # Affiche les erreurs Navitia s'il y en a
+                    st.json(data.get("error", data))
+            else:
+                st.code(r.text[:1000])
+        except Exception as e:
+            st.error(f"Exception : {e}")
+
 NICE_STOP_ID  = "stop_area:SNCF:87756056"   # Nice-Ville
 
 WEEKEND_START = date(2026, 7, 24)
