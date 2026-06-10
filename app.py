@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime, date, time as dtime
+from datetime import datetime, date, time as dtime, timedelta
 import time
 import calendar
 import requests
@@ -66,11 +66,9 @@ with st.sidebar:
                 journeys = data.get("journeys", [])
                 st.write(f"**Journeys:** {len(journeys)}")
                 if journeys:
-                    # Affiche juste les sections du premier journey
                     for s in journeys[0].get("sections", []):
                         st.write(f"- type=`{s.get('type')}` | mode=`{s.get('display_informations', {}).get('commercial_mode', '')}`")
                 else:
-                    # Affiche les erreurs Navitia s'il y en a
                     st.json(data.get("error", data))
             else:
                 st.code(r.text[:1000])
@@ -290,6 +288,15 @@ p, div, span, [data-testid="stWidgetLabel"] {
     padding: 2px 8px;
     border-radius: 20px;
 }
+.train-nuit {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #3730a3;
+    background: #e0e7ff;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
 .train-horaires {
     font-family: 'DM Mono', monospace;
     font-size: 15px;
@@ -407,7 +414,6 @@ def autocomplete_gare(query: str) -> list[str]:
     if not query or len(query.strip()) < 2:
         return []
     
-    # Cache dans session_state (survit aux reruns)
     cache_key = f"_gare_cache_{query.strip().lower()}"
     if cache_key in st.session_state:
         return st.session_state[cache_key]
@@ -447,7 +453,7 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
         "datetime_represents": "departure",
         "count": 8,
         "min_nb_journeys": 3,
-        "data_freshness": "base_schedule",   # ← était "realtime", KO pour dates futures
+        "data_freshness": "base_schedule",
     })
     if not data or not data.get("journeys"):
         return []
@@ -456,19 +462,16 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
     for j in data["journeys"]:
         sections = j.get("sections", [])
 
-        # Récupère uniquement les sections de transport (pas les marches)
         pt_sections = [s for s in sections if s.get("type") == "public_transport"]
         if not pt_sections:
             continue
 
-        # Numéro de train : on prend la 1ère section PT (train principal)
         first_pt = pt_sections[0]
         disp = first_pt.get("display_informations", {})
         train_number = disp.get("headsign", "") or disp.get("label", "")
         train_name   = disp.get("commercial_mode", "") or disp.get("physical_mode", "")
 
-        # Heures départ / arrivée globales du journey
-        dep_raw = j.get("departure_date_time", "")   # "20260725T083000"
+        dep_raw = j.get("departure_date_time", "")
         arr_raw = j.get("arrival_date_time", "")
 
         def parse_dt(s):
@@ -485,18 +488,23 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
         duration_min = int(j.get("duration", 0)) // 60
         nb_transfers = int(j.get("nb_transfers", 0))
 
+        # ── Détection train de nuit : arrivée le lendemain du départ ──
+        is_night_train = arr_dt.date() > dep_dt.date()
+
         results.append({
             "dep": dep_dt.strftime("%H:%M"),
             "arr": arr_dt.strftime("%H:%M"),
+            "dep_date": dep_dt.strftime("%-d %b"),   # ex. "24 juil" affiché si train de nuit
+            "arr_date": arr_dt.strftime("%-d %b"),
             "duration_min": duration_min,
             "nb_transfers": nb_transfers,
             "train_number": train_number,
             "train_name": train_name,
             "dep_dt": dep_dt,
             "arr_dt": arr_dt,
+            "is_night_train": is_night_train,
         })
 
-    # Trie : directs d'abord, puis par heure de départ
     results.sort(key=lambda x: (x["nb_transfers"], x["dep_dt"]))
     return results
 
@@ -509,13 +517,20 @@ def compute_statut(membre: dict) -> str:
         return "arrive"
     now = datetime.now()
     try:
-        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() if membre.get("date_arrivee") else now.date()
+        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() \
+                   if membre.get("date_arrivee") else now.date()
         h_dep = datetime.strptime(membre["heure_depart"], "%H:%M").time()
         h_arr = datetime.strptime(membre["heure_arrivee"], "%H:%M").time()
-        dt_dep = datetime.combine(date_arr, h_dep)
+
         dt_arr = datetime.combine(date_arr, h_arr)
+
+        # ── FIX train de nuit : si h_dep > h_arr, le départ était la veille ──
+        date_dep = date_arr - timedelta(days=1) if h_dep > h_arr else date_arr
+        dt_dep   = datetime.combine(date_dep, h_dep)
+
     except Exception:
         return membre["statut"]
+
     if now < dt_dep:
         return "pas_parti"
     if dt_dep <= now < dt_arr:
@@ -540,7 +555,8 @@ def get_card_class(statut: str, direction: str) -> str:
 
 def format_countdown(membre: dict) -> str:
     try:
-        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() if membre.get("date_arrivee") else date.today()
+        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() \
+                   if membre.get("date_arrivee") else date.today()
         target = datetime.combine(date_arr, datetime.strptime(membre["heure_arrivee"], "%H:%M").time())
         delta = target - datetime.now()
         if delta.total_seconds() <= 0:
@@ -662,7 +678,6 @@ def render_calendrier(membres: list):
 defaults = {
     "my_ids":            [],
     "show_form":         False,
-    # champs du formulaire (pour pré-remplissage)
     "form_prenom":       "",
     "form_ville":        "",
     "form_date":         DATE_DEFAULT,
@@ -670,7 +685,6 @@ defaults = {
     "form_h_arr":        None,
     "form_train":        "",
     "form_direction":    "Aller — vers Nice",
-    # recherche SNCF
     "search_done":       False,
     "search_results":    [],
     "search_query_ville": "",
@@ -731,9 +745,7 @@ tab_dashboard, tab_calendrier = st.tabs(["🚄 Trajets", "📅 Calendrier"])
 # ══════════════════════════════════════════════
 with tab_dashboard:
 
-    # ── Helpers de pré-remplissage ──
     def prefill_from_train(idx: int):
-        """Pré-remplit les champs du formulaire depuis un résultat de recherche."""
         results = st.session_state.search_results
         if idx < 0 or idx >= len(results):
             return
@@ -751,9 +763,7 @@ with tab_dashboard:
         st.session_state.form_h_arr         = None
         st.session_state.form_train         = ""
 
-    # ── Formulaire ──
     def render_formulaire():
-        # Direction
         direction_idx = 0 if st.session_state.form_direction == "Aller — vers Nice" else 1
         direction = st.radio(
             "Type de trajet",
@@ -765,18 +775,15 @@ with tab_dashboard:
         st.session_state.form_direction = direction
         is_retour = direction.startswith("Retour")
 
-        # Prénom
         prenom = st.text_input("Prénom *", value=st.session_state.form_prenom,
                                placeholder="ex. Sophie", key="input_prenom")
         st.session_state.form_prenom = prenom
 
-        # Labels selon direction
         ville_label = "Destination *"             if is_retour else "Gare de départ *"
-        date_label  = "Date de départ de Nice *"  if is_retour else "Date d'arrivée à Nice *"
+        date_label  = "Date d'arrivée à destination *"
         dep_label   = "Heure de départ de Nice *" if is_retour else "Heure de départ *"
         arr_label   = "Heure d'arrivée *"
 
-        # ── Searchbox autocomplete gare ──
         st.markdown(f'''<label style="font-size:14px;font-weight:600;color:#1e293b">{ville_label}</label>''',
                     unsafe_allow_html=True)
         selected_gare = st_searchbox(
@@ -789,14 +796,12 @@ with tab_dashboard:
             edit_after_submit="option",
         )
 
-        # selected_gare est soit un tuple (label, stop_id) soit une str saisie libre
         if isinstance(selected_gare, str) and selected_gare.strip():
             gare_label   = selected_gare
             gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
         else:
             gare_label, gare_stop_id = "", None
 
-        # Reset la recherche si la gare change
         if gare_label != st.session_state.form_ville:
             reset_search()
         st.session_state.form_ville = gare_label
@@ -813,7 +818,13 @@ with tab_dashboard:
             reset_search()
         st.session_state.form_date = d_sel
 
-        # ── BOUTON RECHERCHE SNCF ──
+        # ── Info contextuelle train de nuit ──
+        st.markdown("""
+        <div style="font-size:12px; color:#64748b; margin: 2px 0 8px 0; font-style:italic;">
+            🌙 Train de nuit ? Indique la date d'<strong>arrivée</strong> — les horaires de départ la veille seront gérés automatiquement.
+        </div>
+        """, unsafe_allow_html=True)
+
         st.markdown("")
         col_search, col_reset = st.columns([3, 1])
         with col_search:
@@ -828,19 +839,17 @@ with tab_dashboard:
                 if st.button("✕ Effacer", use_container_width=True, key="btn_clear_search"):
                     reset_search()
                     st.rerun()
-            
+
             if st.button("Vider le cache API"):
                 autocomplete_gare.clear()
                 search_trains.clear()
                 st.success("Cache vidé")
 
         if do_search and gare_label.strip():
-            # Si l'utilisateur a sélectionné depuis l'autocomplete on a déjà le stop_id,
-            # sinon on fait un appel /places pour le résoudre.
             with st.spinner("Recherche des trains…"):
                 stop_id = gare_stop_id
                 if not stop_id:
-                    autocomplete_gare(gare_label.strip())  # peuple le map si besoin
+                    autocomplete_gare(gare_label.strip())
                     stop_id = st.session_state.get("_gare_id_map", {}).get(gare_label.strip())
 
                 if not stop_id:
@@ -851,7 +860,12 @@ with tab_dashboard:
                 else:
                     from_id = stop_id      if not is_retour else NICE_STOP_ID
                     to_id   = NICE_STOP_ID if not is_retour else stop_id
-                    dt_str  = d_sel.strftime("%Y%m%dT050000")
+
+                    # ── FIX train de nuit : on démarre la recherche la veille à 18h00
+                    #    pour capturer les trains de nuit qui partent le soir précédent.
+                    search_date = d_sel - timedelta(days=1)
+                    dt_str = search_date.strftime("%Y%m%dT180000")
+
                     trains  = search_trains(from_id, to_id, dt_str)
                     st.session_state.search_done = True
                     st.session_state.search_results = trains
@@ -859,7 +873,6 @@ with tab_dashboard:
                     st.session_state.search_query_date = d_sel
             st.rerun()
 
-        # ── Affichage des résultats ──
         if st.session_state.search_done:
             results = st.session_state.search_results
             if not results:
@@ -875,11 +888,13 @@ with tab_dashboard:
             else:
                 n = len(results)
                 date_fmt = st.session_state.search_query_date.strftime("%-d %B")
+                nb_nuit = sum(1 for t in results if t.get("is_night_train"))
+                nuit_info = f" dont {nb_nuit} train{'s' if nb_nuit > 1 else ''} de nuit 🌙" if nb_nuit else ""
                 st.markdown(f"""
                 <div class="search-info">
                     🚄 {n} train{"s" if n > 1 else ""} trouvé{"s" if n > 1 else ""}
                     depuis <strong>{st.session_state.search_query_ville}</strong>
-                    le {date_fmt} — clique pour pré-remplir
+                    le {date_fmt}{nuit_info} — clique pour pré-remplir
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -891,19 +906,28 @@ with tab_dashboard:
                         if t["nb_transfers"] == 0
                         else f'<span class="train-correspondance">{t["nb_transfers"]} correspondance{"s" if t["nb_transfers"] > 1 else ""}</span>'
                     )
+                    # Badge train de nuit
+                    tag_nuit = '<span class="train-nuit">🌙 Nuit</span>' if t.get("is_night_train") else ""
+
                     h = t["duration_min"] // 60
                     mn = t["duration_min"] % 60
                     duree_str = f"{h}h{mn:02d}" if h else f"{mn}min"
                     num_str = f'<span class="train-num">{t["train_number"]}</span>' if t["train_number"] else ""
                     type_str = f'<span class="train-type">{t["train_name"]}</span>' if t["train_name"] else ""
 
+                    # Affiche les dates si train de nuit (départ ≠ arrivée)
+                    if t.get("is_night_train"):
+                        horaires_str = f'{t["dep_date"]} {t["dep"]} → {t["arr_date"]} {t["arr"]}'
+                    else:
+                        horaires_str = f'{t["dep"]} → {t["arr"]}'
+
                     st.markdown(f"""
                     <div class="{card_cls}">
                         <div class="train-result-top">
-                            {num_str}{type_str}{tag_direct}
+                            {num_str}{type_str}{tag_direct}{tag_nuit}
                         </div>
                         <div style="display:flex; align-items:baseline; gap:10px; margin-top:4px;">
-                            <span class="train-horaires">{t['dep']} → {t['arr']}</span>
+                            <span class="train-horaires">{horaires_str}</span>
                             <span class="train-duree">({duree_str})</span>
                         </div>
                     </div>
@@ -915,13 +939,13 @@ with tab_dashboard:
                         prefill_from_train(i)
                         st.rerun()
 
-        # ── Séparateur ──
         if st.session_state.selected_train_idx is not None:
             t = st.session_state.search_results[st.session_state.selected_train_idx]
+            nuit_mention = " · 🌙 Train de nuit" if t.get("is_night_train") else ""
             st.markdown(f"""
             <div class="prefill-banner">
                 ✅ Train <strong>{t['train_number']}</strong> sélectionné —
-                {t['dep']} → {t['arr']} · horaires pré-remplis ci-dessous
+                {t['dep']} → {t['arr']} · horaires pré-remplis ci-dessous{nuit_mention}
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -931,7 +955,6 @@ with tab_dashboard:
             </div>
             """, unsafe_allow_html=True)
 
-        # ── Heures (pré-remplies ou manuelles) ──
         col1, col2 = st.columns(2)
         with col1:
             h_dep_val = st.session_state.form_h_dep
@@ -942,6 +965,15 @@ with tab_dashboard:
             h_arr = st.time_input(arr_label, value=h_arr_val, key="input_h_arr")
             st.session_state.form_h_arr = h_arr
 
+        # ── Avertissement visuel si saisie manuelle détecte un train de nuit ──
+        if h_dep and h_arr and h_dep > h_arr:
+            st.markdown("""
+            <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px;
+                        padding:8px 12px; font-size:12px; color:#3730a3; margin-top:4px;">
+                🌙 <strong>Train de nuit détecté</strong> — le départ sera considéré la veille de la date d'arrivée saisie.
+            </div>
+            """, unsafe_allow_html=True)
+
         train = st.text_input(
             "Numéro de train (optionnel)",
             value=st.session_state.form_train,
@@ -950,7 +982,6 @@ with tab_dashboard:
         )
         st.session_state.form_train = train
 
-        # ── Boutons Enregistrer / Annuler ──
         st.markdown("")
         col_save, col_cancel = st.columns([2, 1])
         with col_save:
@@ -971,7 +1002,6 @@ with tab_dashboard:
                     result = add_membre(data)
                     if result:
                         st.session_state.my_ids.append(result["id"])
-                        # Reset complet
                         st.session_state.show_form  = False
                         st.session_state.form_prenom = ""
                         st.session_state.form_ville  = ""
@@ -987,7 +1017,6 @@ with tab_dashboard:
                 reset_search()
                 st.rerun()
 
-    # ── Toggle formulaire ──
     if not st.session_state.show_form:
         st.button("＋ Ajouter un trajet", use_container_width=True, type="primary",
                   on_click=lambda: st.session_state.update(show_form=True))
@@ -996,7 +1025,6 @@ with tab_dashboard:
             st.markdown("**Mon trajet**")
             render_formulaire()
 
-    # ── Compte à rebours ──
     if prochain:
         countdown = format_countdown(prochain)
         date_str  = fmt_date(prochain.get("date_arrivee", ""))
@@ -1014,7 +1042,6 @@ with tab_dashboard:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Liste des trajets ──
     def render_trajet(m: dict):
         statut    = compute_statut(m)
         direction = m.get("direction", "aller")
@@ -1027,6 +1054,14 @@ with tab_dashboard:
         icon      = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
         trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
 
+        # ── Indicateur train de nuit en saisie manuelle ──
+        try:
+            h_dep_t = datetime.strptime(m["heure_depart"], "%H:%M").time()
+            h_arr_t = datetime.strptime(m["heure_arrivee"], "%H:%M").time()
+            nuit_icon = " 🌙" if h_dep_t > h_arr_t else ""
+        except Exception:
+            nuit_icon = ""
+
         st.markdown(f"""
         <div class="membre-card {card_cls}">
             <div class="membre-top">
@@ -1036,7 +1071,7 @@ with tab_dashboard:
                 <span class="direction-tag">{dir_tag}</span>
             </div>
             <div class="membre-trajet">{trajet_str}</div>
-            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
+            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}{nuit_icon}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1098,6 +1133,12 @@ with tab_calendrier:
                 dir_tag    = "RETOUR" if direction == "retour" else "ALLER"
                 statut     = compute_statut(m)
                 icon       = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+                try:
+                    h_dep_t = datetime.strptime(m["heure_depart"], "%H:%M").time()
+                    h_arr_t = datetime.strptime(m["heure_arrivee"], "%H:%M").time()
+                    nuit_icon = " 🌙" if h_dep_t > h_arr_t else ""
+                except Exception:
+                    nuit_icon = ""
                 st.markdown(f"""
                 <div class="membre-card {get_card_class(statut, direction)}">
                     <div class="membre-top">
@@ -1107,7 +1148,7 @@ with tab_calendrier:
                         <span class="direction-tag">{dir_tag}</span>
                     </div>
                     <div class="membre-trajet">{trajet_str}</div>
-                    <div class="membre-horaires">🚆 {m['heure_depart']} → {m['heure_arrivee']}{' · ' + m['numero_train'] if m.get('numero_train') else ''}</div>
+                    <div class="membre-horaires">🚆 {m['heure_depart']} → {m['heure_arrivee']}{' · ' + m['numero_train'] if m.get('numero_train') else ''}{nuit_icon}</div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
