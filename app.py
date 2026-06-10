@@ -405,11 +405,6 @@ def autocomplete_gare(query: str) -> list[str]:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
-    """
-    Recherche les trajets entre deux gares.
-    dt_str format : "20260725T080000"
-    Retourne une liste de dicts normalisés.
-    """
     data = sncf_get("journeys", {
         "from": from_id,
         "to": to_id,
@@ -417,7 +412,7 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
         "datetime_represents": "departure",
         "count": 8,
         "min_nb_journeys": 3,
-        "data_freshness": "realtime",
+        "data_freshness": "base_schedule",   # ← était "realtime", KO pour dates futures
     })
     if not data or not data.get("journeys"):
         return []
@@ -833,10 +828,12 @@ with tab_dashboard:
         if st.session_state.search_done:
             results = st.session_state.search_results
             if not results:
+                stop_used = st.session_state.get("form_gare_stop_id", "inconnu")
                 st.markdown(f"""
                 <div class="search-error">
                     😕 Aucun train trouvé pour <strong>{st.session_state.search_query_ville}</strong>
-                    le {st.session_state.search_query_date.strftime("%-d %B %Y")}.
+                    le {st.session_state.search_query_date.strftime("%-d %B %Y")}.<br>
+                    <span style="font-size:11px;opacity:0.7">stop_id utilisé : {stop_used}</span><br>
                     Vérifie le nom de la gare ou remplis les horaires manuellement ci-dessous.
                 </div>
                 """, unsafe_allow_html=True)
