@@ -2,12 +2,18 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, date
 import time
+import calendar
 
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+# Date du weekend
+WEEKEND_START = date(2026, 7, 24)
+WEEKEND_END   = date(2026, 7, 27)
+DATE_DEFAULT  = date(2026, 7, 25)
 
 @st.cache_resource
 def get_supabase():
@@ -23,6 +29,34 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+
+/* ── Lisibilité globale des labels Streamlit ── */
+label, .stRadio label, .stTextInput label,
+.stTimeInput label, .stDateInput label,
+p, div, span, [data-testid="stWidgetLabel"] {
+    color: #1e293b !important;
+}
+.stRadio > div > label > div > p {
+    color: #1e293b !important;
+    font-weight: 500 !important;
+}
+/* Radio buttons sélectionnés */
+.stRadio [data-baseweb="radio"] [data-checked="true"] ~ div,
+.stRadio [aria-checked="true"] ~ div span {
+    color: #0284c7 !important;
+    font-weight: 600 !important;
+}
+/* Tabs */
+.stTabs [data-baseweb="tab"] {
+    color: #475569 !important;
+    font-weight: 600 !important;
+}
+.stTabs [aria-selected="true"] {
+    color: #0284c7 !important;
+}
+/* Métriques */
+[data-testid="stMetricLabel"] { color: #475569 !important; font-weight: 600 !important; }
+[data-testid="stMetricValue"] { color: #0f172a !important; font-weight: 700 !important; }
 
 .hero {
     background: linear-gradient(160deg, #0c4a6e 0%, #075985 60%, #0ea5e9 100%);
@@ -97,38 +131,111 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 .badge {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
-    font-weight: 600;
-    padding: 2px 10px;
+    font-weight: 700;
+    padding: 3px 10px;
     border-radius: 20px;
     letter-spacing: 0.03em;
 }
-.badge-arrive    { background: #ecfdf5; color: #10b981; }
-.badge-en_route  { background: #fffbeb; color: #f59e0b; }
-.badge-pas_parti { background: #f1f5f9; color: #94a3b8; }
-.badge-retour    { background: #f5f3ff; color: #8b5cf6; }
+.badge-arrive    { background: #d1fae5; color: #065f46; }
+.badge-en_route  { background: #fef3c7; color: #92400e; }
+.badge-pas_parti { background: #e2e8f0; color: #334155; }
+.badge-retour    { background: #ede9fe; color: #4c1d95; }
 
 .direction-tag {
     font-family: 'DM Mono', monospace;
     font-size: 10px;
-    font-weight: 600;
-    padding: 1px 7px;
+    font-weight: 700;
+    padding: 2px 8px;
     border-radius: 20px;
     letter-spacing: 0.05em;
-    background: #f1f5f9;
-    color: #64748b;
+    background: #e2e8f0;
+    color: #334155;
 }
 
-.membre-trajet { font-size: 13px; color: #64748b; margin-top: 3px; }
-.membre-horaires { font-family: 'DM Mono', monospace; font-size: 12px; color: #94a3b8; margin-top: 2px; }
+.membre-trajet  { font-size: 13px; color: #475569; margin-top: 3px; font-weight: 500; }
+.membre-horaires { font-family: 'DM Mono', monospace; font-size: 12px; color: #64748b; margin-top: 2px; }
 
 .section-title {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: #64748b;
     margin: 20px 0 10px 2px;
+}
+
+/* Calendrier custom */
+.cal-wrap {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+    margin-bottom: 8px;
+}
+.cal-header {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 14px;
+}
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    text-align: center;
+}
+.cal-dow {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    padding: 4px 0;
+    letter-spacing: 0.05em;
+}
+.cal-day {
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    padding: 6px 2px;
+    border-radius: 8px;
+    line-height: 1.2;
+    min-height: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 5px;
+}
+.cal-day.empty { background: transparent; }
+.cal-day.weekend-bg { background: #eff6ff; }
+.cal-day.today { border: 2px solid #0ea5e9; }
+.cal-day-num { font-weight: 700; color: #0f172a; }
+.cal-day.weekend-bg .cal-day-num { color: #0284c7; }
+.cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 2px; }
+.dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.dot-aller  { background: #0ea5e9; }
+.dot-retour { background: #8b5cf6; }
+.cal-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #64748b;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
 }
 
 .empty-state {
@@ -200,11 +307,7 @@ def get_badge_class(statut: str, direction: str) -> str:
 def get_badge_label(statut: str, direction: str) -> str:
     if direction == "retour" and statut == "pas_parti":
         return "Pas encore reparti"
-    labels = {
-        "pas_parti": "Pas encore parti",
-        "en_route": "En route",
-        "arrive": "Arrivé·e !",
-    }
+    labels = {"pas_parti": "Pas encore parti", "en_route": "En route", "arrive": "Arrivé·e !"}
     return labels.get(statut, statut)
 
 def get_card_class(statut: str, direction: str) -> str:
@@ -241,10 +344,86 @@ def fmt_date(date_str: str) -> str:
 
 
 # ─────────────────────────────────────────────
+# CALENDRIER HTML
+# ─────────────────────────────────────────────
+def render_calendrier(membres: list):
+    # Construire index date -> liste de trajets
+    by_date: dict = {}
+    for m in membres:
+        d = m.get("date_arrivee")
+        if d:
+            by_date.setdefault(d, []).append(m)
+
+    # Juillet 2026
+    year, month = 2026, 7
+    today = date.today()
+    cal = calendar.monthcalendar(year, month)
+    jours_fr = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"]
+    mois_fr  = "Juillet 2026"
+
+    weekend_days = {24, 25, 26, 27}  # ven-lun du weekend
+
+    grid_html = ""
+    for dow in jours_fr:
+        grid_html += f'<div class="cal-dow">{dow}</div>'
+
+    for week in cal:
+        for day_num in week:
+            if day_num == 0:
+                grid_html += '<div class="cal-day empty"></div>'
+                continue
+
+            d_obj = date(year, month, day_num)
+            d_str = d_obj.strftime("%Y-%m-%d")
+            trajets = by_date.get(d_str, [])
+
+            classes = "cal-day"
+            if day_num in weekend_days:
+                classes += " weekend-bg"
+            if d_obj == today:
+                classes += " today"
+
+            dots_html = ""
+            if trajets:
+                dots_html = '<div class="cal-dots">'
+                for t in trajets:
+                    dot_cls = "dot-retour" if t.get("direction") == "retour" else "dot-aller"
+                    dots_html += f'<span class="dot {dot_cls}" title="{t["prenom"]}"></span>'
+                dots_html += "</div>"
+
+            # Noms en petit sous le numéro
+            noms = ""
+            if trajets:
+                prenoms = [t["prenom"][:3] for t in trajets[:3]]
+                noms = f'<div style="font-size:9px;color:#64748b;line-height:1.1;margin-top:1px">{" ".join(prenoms)}</div>'
+
+            grid_html += f"""
+            <div class="{classes}">
+                <div class="cal-day-num">{day_num}</div>
+                {dots_html}
+                {noms}
+            </div>"""
+
+    legend = """
+    <div class="cal-legend">
+        <span><span class="legend-dot" style="background:#0ea5e9;display:inline-block"></span> Aller vers Nice</span>
+        <span><span class="legend-dot" style="background:#8b5cf6;display:inline-block"></span> Retour</span>
+        <span style="background:#eff6ff;padding:2px 8px;border-radius:6px;font-size:11px;color:#0284c7;font-weight:600">Weekend 24-27 juillet</span>
+    </div>"""
+
+    st.markdown(f"""
+    <div class="cal-wrap">
+        <div class="cal-header">📅 {mois_fr}</div>
+        <div class="cal-grid">{grid_html}</div>
+        {legend}
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────
 if "my_ids" not in st.session_state:
-    # Liste des IDs de trajets appartenant à cet utilisateur
     st.session_state.my_ids = []
 if "show_form" not in st.session_state:
     st.session_state.show_form = False
@@ -258,7 +437,6 @@ membres = get_membres()
 allers  = [m for m in membres if m.get("direction", "aller") == "aller"]
 retours = [m for m in membres if m.get("direction") == "retour"]
 
-# Stats sur les allers uniquement (arrivées à Nice)
 nb_arrives = sum(1 for m in allers if compute_statut(m) == "arrive")
 nb_route   = sum(1 for m in allers if compute_statut(m) == "en_route")
 nb_attente = len(allers) - nb_arrives - nb_route
@@ -269,15 +447,13 @@ en_route_sorted = sorted(
 )
 prochain = en_route_sorted[0] if en_route_sorted else None
 
-my_prenoms = {m["prenom"] for m in membres if m["id"] in st.session_state.my_ids}
-
 
 # ─────────────────────────────────────────────
 # HERO
 # ─────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
-    <div class="hero-eyebrow">Vacances d'été 2025</div>
+    <div class="hero-eyebrow">Weekend du 25 juillet 2026</div>
     <h1 class="hero-title">On arrive à Nice ☀️</h1>
     <p class="hero-sub">Suis les arrivées de toute la bande en temps réel</p>
 </div>
@@ -285,174 +461,219 @@ st.markdown("""
 
 if allers:
     col1, col2, col3 = st.columns(3)
-    col1.metric("Arrivé·e·s", f"{nb_arrives} ✅")
-    col2.metric("En route", f"{nb_route} 🚄")
-    col3.metric("Pas encore partis", f"{nb_attente} 🏠")
+    col1.metric("Arrivé·e·s", nb_arrives)
+    col2.metric("En route", nb_route)
+    col3.metric("Pas encore partis", nb_attente)
 
 
 # ─────────────────────────────────────────────
-# FORMULAIRE
+# TABS : Dashboard / Calendrier
 # ─────────────────────────────────────────────
-def render_formulaire():
-    direction = st.radio(
-        "Type de trajet",
-        ["Aller — vers Nice", "Retour — depuis Nice"],
-        horizontal=True
-    )
-    is_retour = direction.startswith("Retour")
+tab_dashboard, tab_calendrier = st.tabs(["🚄 Trajets", "📅 Calendrier"])
 
-    prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
 
-    if is_retour:
-        ville_label = "Destination *"
-        ville_placeholder = "ex. Paris Gare de Lyon"
-        date_label = "Date de départ depuis Nice *"
-        dep_label = "Heure de départ de Nice *"
-        arr_label = "Heure d'arrivée *"
-    else:
-        ville_label = "Ville de départ *"
-        ville_placeholder = "ex. Paris Gare de Lyon"
-        date_label = "Date d'arrivée à Nice *"
-        dep_label = "Heure de départ *"
-        arr_label = "Heure d'arrivée à Nice *"
+# ══════════════════════════════════════════════
+# TAB DASHBOARD
+# ══════════════════════════════════════════════
+with tab_dashboard:
 
-    ville = st.text_input(ville_label, placeholder=ville_placeholder)
-    d_arr = st.date_input(date_label, value=None, min_value=date.today())
+    # ── Formulaire ──
+    def render_formulaire():
+        direction = st.radio(
+            "Type de trajet",
+            ["Aller — vers Nice", "Retour — depuis Nice"],
+            horizontal=True
+        )
+        is_retour = direction.startswith("Retour")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        h_dep = st.time_input(dep_label, value=None)
-    with col2:
-        h_arr = st.time_input(arr_label, value=None)
+        prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
 
-    train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
+        if is_retour:
+            ville_label = "Destination *"
+            date_label  = "Date de départ depuis Nice *"
+            dep_label   = "Heure de départ de Nice *"
+            arr_label   = "Heure d'arrivée *"
+        else:
+            ville_label = "Ville de départ *"
+            date_label  = "Date d'arrivée à Nice *"
+            dep_label   = "Heure de départ *"
+            arr_label   = "Heure d'arrivée à Nice *"
 
-    col_save, col_cancel = st.columns([2, 1])
-    with col_save:
-        if st.button("Enregistrer", use_container_width=True, type="primary"):
-            if not prenom or not ville or not d_arr or not h_dep or not h_arr:
-                st.error("Remplis tous les champs obligatoires.")
-            else:
-                data = {
-                    "prenom": prenom.strip(),
-                    "ville_depart": ville.strip(),
-                    "date_arrivee": d_arr.strftime("%Y-%m-%d"),
-                    "heure_depart": h_dep.strftime("%H:%M"),
-                    "heure_arrivee": h_arr.strftime("%H:%M"),
-                    "numero_train": train.strip() or None,
-                    "statut": "pas_parti",
-                    "direction": "retour" if is_retour else "aller",
-                }
-                result = add_membre(data)
-                if result:
-                    st.session_state.my_ids.append(result["id"])
-                    st.session_state.show_form = False
-                    st.success(f"Trajet de {prenom} enregistré !")
-                    st.rerun()
+        ville = st.text_input(ville_label, placeholder="ex. Paris Gare de Lyon")
+        d_sel = st.date_input(
+            date_label,
+            value=DATE_DEFAULT,
+            min_value=date(2026, 7, 1),
+            max_value=date(2026, 8, 31),
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            h_dep = st.time_input(dep_label, value=None)
+        with col2:
+            h_arr = st.time_input(arr_label, value=None)
+
+        train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
+
+        col_save, col_cancel = st.columns([2, 1])
+        with col_save:
+            if st.button("Enregistrer", use_container_width=True, type="primary"):
+                if not prenom or not ville or not d_sel or not h_dep or not h_arr:
+                    st.error("Remplis tous les champs obligatoires.")
                 else:
-                    st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
-    with col_cancel:
-        if st.button("Annuler", use_container_width=True):
-            st.session_state.show_form = False
-            st.rerun()
-
-# Bouton d'ajout — toujours visible (on peut avoir plusieurs trajets)
-if not st.session_state.show_form:
-    st.button("＋ Ajouter un trajet", use_container_width=True, type="primary",
-              on_click=lambda: st.session_state.update(show_form=True))
-else:
-    with st.container(border=True):
-        st.markdown("**Mon trajet**")
-        render_formulaire()
-
-
-# ─────────────────────────────────────────────
-# COMPTE À REBOURS
-# ─────────────────────────────────────────────
-if prochain:
-    countdown = format_countdown(prochain)
-    date_str = fmt_date(prochain.get("date_arrivee", ""))
-    st.markdown(f"""
-    <div class="countdown-box">
-        <div class="countdown-left">
-            <div class="eyebrow">Prochaine arrivée à Nice</div>
-            <div class="countdown-name">{prochain['prenom']}</div>
-            <div class="countdown-detail">{prochain['ville_depart']} → Nice · {date_str} {prochain['heure_arrivee']}</div>
-        </div>
-        <div>
-            <div class="countdown-time">{countdown}</div>
-            <div class="countdown-sublabel">avant l'arrivée</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────
-# LISTE DES MEMBRES
-# ─────────────────────────────────────────────
-def render_trajet(m: dict):
-    statut    = compute_statut(m)
-    direction = m.get("direction", "aller")
-    card_cls  = get_card_class(statut, direction)
-    badge_cls = get_badge_class(statut, direction)
-    badge_lbl = get_badge_label(statut, direction)
-    train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
-    date_str  = fmt_date(m.get("date_arrivee", ""))
-    dir_tag   = "RETOUR" if direction == "retour" else "ALLER"
-    icon      = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
-
-    if direction == "retour":
-        trajet_str = f"Nice → {m['ville_depart']}"
-    else:
-        trajet_str = f"{m['ville_depart']} → Nice"
-
-    st.markdown(f"""
-    <div class="membre-card {card_cls}">
-        <div class="membre-top">
-            <span style="font-size:20px">{icon}</span>
-            <span class="membre-nom">{m['prenom']}</span>
-            <span class="badge {badge_cls}">{badge_lbl}</span>
-            <span class="direction-tag">{dir_tag}</span>
-        </div>
-        <div class="membre-trajet">{trajet_str}</div>
-        <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Boutons si c'est mon trajet
-    if m["id"] in st.session_state.my_ids:
-        c1, c2, _ = st.columns([1.5, 1, 2])
-        with c1:
-            if statut != "arrive":
-                label = "🎉 Je suis arrivé·e !" if direction == "aller" else "🎉 Je suis rentré·e !"
-                if st.button(label, key=f"arr_{m['id']}", use_container_width=True):
-                    update_statut(m["id"], "arrive")
-                    st.rerun()
-        with c2:
-            if st.button("Supprimer", key=f"del_{m['id']}", use_container_width=True):
-                delete_membre(m["id"])
-                st.session_state.my_ids.remove(m["id"])
+                    data = {
+                        "prenom": prenom.strip(),
+                        "ville_depart": ville.strip(),
+                        "date_arrivee": d_sel.strftime("%Y-%m-%d"),
+                        "heure_depart": h_dep.strftime("%H:%M"),
+                        "heure_arrivee": h_arr.strftime("%H:%M"),
+                        "numero_train": train.strip() or None,
+                        "statut": "pas_parti",
+                        "direction": "retour" if is_retour else "aller",
+                    }
+                    result = add_membre(data)
+                    if result:
+                        st.session_state.my_ids.append(result["id"])
+                        st.session_state.show_form = False
+                        st.success(f"Trajet de {prenom} enregistré !")
+                        st.rerun()
+                    else:
+                        st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
+        with col_cancel:
+            if st.button("Annuler", use_container_width=True):
+                st.session_state.show_form = False
                 st.rerun()
 
+    if not st.session_state.show_form:
+        st.button("＋ Ajouter un trajet", use_container_width=True, type="primary",
+                  on_click=lambda: st.session_state.update(show_form=True))
+    else:
+        with st.container(border=True):
+            st.markdown("**Mon trajet**")
+            render_formulaire()
 
-if not membres:
-    st.markdown("""
-    <div class="empty-state">
-        <div class="empty-icon">🚉</div>
-        <div class="empty-title">Personne n'a encore ajouté son trajet</div>
-        <div>Sois le premier à indiquer ton heure d'arrivée.</div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    if allers:
-        st.markdown('<div class="section-title">Arrivées à Nice</div>', unsafe_allow_html=True)
-        for m in allers:
-            render_trajet(m)
+    # ── Compte à rebours ──
+    if prochain:
+        countdown = format_countdown(prochain)
+        date_str  = fmt_date(prochain.get("date_arrivee", ""))
+        st.markdown(f"""
+        <div class="countdown-box">
+            <div class="countdown-left">
+                <div class="eyebrow">Prochaine arrivée à Nice</div>
+                <div class="countdown-name">{prochain['prenom']}</div>
+                <div class="countdown-detail">{prochain['ville_depart']} → Nice · {date_str} à {prochain['heure_arrivee']}</div>
+            </div>
+            <div>
+                <div class="countdown-time">{countdown}</div>
+                <div class="countdown-sublabel">avant l'arrivée</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    if retours:
-        st.markdown('<div class="section-title">Retours</div>', unsafe_allow_html=True)
-        for m in retours:
-            render_trajet(m)
+    # ── Liste des trajets ──
+    def render_trajet(m: dict):
+        statut    = compute_statut(m)
+        direction = m.get("direction", "aller")
+        card_cls  = get_card_class(statut, direction)
+        badge_cls = get_badge_class(statut, direction)
+        badge_lbl = get_badge_label(statut, direction)
+        train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
+        date_str  = fmt_date(m.get("date_arrivee", ""))
+        dir_tag   = "RETOUR" if direction == "retour" else "ALLER"
+        icon      = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+        trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
+
+        st.markdown(f"""
+        <div class="membre-card {card_cls}">
+            <div class="membre-top">
+                <span style="font-size:20px">{icon}</span>
+                <span class="membre-nom">{m['prenom']}</span>
+                <span class="badge {badge_cls}">{badge_lbl}</span>
+                <span class="direction-tag">{dir_tag}</span>
+            </div>
+            <div class="membre-trajet">{trajet_str}</div>
+            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if m["id"] in st.session_state.my_ids:
+            c1, c2, _ = st.columns([1.5, 1, 2])
+            with c1:
+                if statut != "arrive":
+                    label = "🎉 Je suis arrivé·e !" if direction == "aller" else "🎉 Je suis rentré·e !"
+                    if st.button(label, key=f"arr_{m['id']}", use_container_width=True):
+                        update_statut(m["id"], "arrive")
+                        st.rerun()
+            with c2:
+                if st.button("Supprimer", key=f"del_{m['id']}", use_container_width=True):
+                    delete_membre(m["id"])
+                    st.session_state.my_ids.remove(m["id"])
+                    st.rerun()
+
+    if not membres:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="empty-icon">🚉</div>
+            <div class="empty-title">Personne n'a encore ajouté son trajet</div>
+            <div>Sois le premier à indiquer ton heure d'arrivée.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        if allers:
+            st.markdown('<div class="section-title">Arrivées à Nice</div>', unsafe_allow_html=True)
+            for m in allers:
+                render_trajet(m)
+        if retours:
+            st.markdown('<div class="section-title">Retours</div>', unsafe_allow_html=True)
+            for m in retours:
+                render_trajet(m)
+
+
+# ══════════════════════════════════════════════
+# TAB CALENDRIER
+# ══════════════════════════════════════════════
+with tab_calendrier:
+    render_calendrier(membres)
+
+    if membres:
+        # Liste des trajets par date sous le calendrier
+        by_date_sorted = {}
+        for m in membres:
+            d = m.get("date_arrivee", "")
+            by_date_sorted.setdefault(d, []).append(m)
+
+        for d_str in sorted(by_date_sorted.keys()):
+            try:
+                d_obj = datetime.strptime(d_str, "%Y-%m-%d")
+                label = d_obj.strftime("%A %-d %B %Y").capitalize()
+            except Exception:
+                label = d_str
+            st.markdown(f'<div class="section-title">{label}</div>', unsafe_allow_html=True)
+            for m in by_date_sorted[d_str]:
+                direction = m.get("direction", "aller")
+                trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
+                dir_tag = "RETOUR" if direction == "retour" else "ALLER"
+                icon = "🎉" if compute_statut(m) == "arrive" else ("🚄" if compute_statut(m) == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+                st.markdown(f"""
+                <div class="membre-card {get_card_class(compute_statut(m), direction)}">
+                    <div class="membre-top">
+                        <span style="font-size:18px">{icon}</span>
+                        <span class="membre-nom">{m['prenom']}</span>
+                        <span class="badge {get_badge_class(compute_statut(m), direction)}">{get_badge_label(compute_statut(m), direction)}</span>
+                        <span class="direction-tag">{dir_tag}</span>
+                    </div>
+                    <div class="membre-trajet">{trajet_str}</div>
+                    <div class="membre-horaires">🚆 {m['heure_depart']} → {m['heure_arrivee']}{' · ' + m['numero_train'] if m.get('numero_train') else ''}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="empty-state">
+            <div class="empty-icon">📅</div>
+            <div class="empty-title">Aucun trajet planifié</div>
+            <div>Ajoute ton trajet dans l'onglet Trajets.</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
