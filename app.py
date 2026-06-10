@@ -5,6 +5,7 @@ import time
 import calendar
 import requests
 from functools import lru_cache
+from streamlit_searchbox import st_searchbox
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -337,12 +338,33 @@ def sncf_get(endpoint: str, params: dict = None) -> dict | None:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def search_stop_area(query: str) -> str | None:
-    """Résout un nom de gare en stop_area ID Navitia. Cache 1h."""
-    data = sncf_get("places", {"q": query, "type[]": "stop_area", "count": 1})
+def autocomplete_gare(query: str) -> list[tuple[str, str]]:
+    """
+    Autocomplétion de gare via l'API SNCF /places.
+    Retourne une liste de tuples (label affiché, stop_area_id).
+    Cache 1h.
+    """
+    if not query or len(query.strip()) < 2:
+        return []
+    data = sncf_get("places", {
+        "q": query.strip(),
+        "type[]": "stop_area",
+        "count": 8,
+        "disable_geojson": "true",
+    })
     if not data or not data.get("places"):
-        return None
-    return data["places"][0]["id"]
+        return []
+
+    results = []
+    for place in data["places"]:
+        name    = place.get("name", "")
+        stop_id = place.get("id", "")
+        admin   = place.get("administrative_regions", [])
+        context = admin[0].get("name", "") if admin else ""
+        label   = f"{name} — {context}" if context and context.lower() not in name.lower() else name
+        if stop_id:
+            results.append((label, stop_id))
+    return results
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -588,6 +610,7 @@ defaults = {
     "search_query_ville": "",
     "search_query_date": DATE_DEFAULT,
     "selected_train_idx": None,
+    "form_gare_stop_id": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -682,17 +705,37 @@ with tab_dashboard:
         st.session_state.form_prenom = prenom
 
         # Labels selon direction
-        ville_label = "Destination *"        if is_retour else "Ville de départ *"
-        date_label  = "Date de départ de Nice *" if is_retour else "Date d'arrivée à Nice *"
+        ville_label = "Destination *"             if is_retour else "Gare de départ *"
+        date_label  = "Date de départ de Nice *"  if is_retour else "Date d'arrivée à Nice *"
         dep_label   = "Heure de départ de Nice *" if is_retour else "Heure de départ *"
         arr_label   = "Heure d'arrivée *"
-        ville_ph    = "ex. Paris Gare de Lyon"
 
-        ville = st.text_input(ville_label, value=st.session_state.form_ville,
-                              placeholder=ville_ph, key="input_ville")
-        if ville != st.session_state.form_ville:
+        # ── Searchbox autocomplete gare ──
+        st.markdown(f'''<label style="font-size:14px;font-weight:600;color:#1e293b">{ville_label}</label>''',
+                    unsafe_allow_html=True)
+        selected_gare = st_searchbox(
+            autocomplete_gare,
+            key="searchbox_gare",
+            placeholder="ex. Paris Gare de Lyon...",
+            label=None,
+            default=st.session_state.get("form_gare_tuple"),
+            default_use_searchterm=True,
+            edit_after_submit="current",
+        )
+
+        # selected_gare est soit un tuple (label, stop_id) soit une str saisie libre
+        if isinstance(selected_gare, tuple):
+            gare_label, gare_stop_id = selected_gare
+        elif isinstance(selected_gare, str):
+            gare_label, gare_stop_id = selected_gare, None
+        else:
+            gare_label, gare_stop_id = "", None
+
+        # Reset la recherche si la gare change
+        if gare_label != st.session_state.form_ville:
             reset_search()
-        st.session_state.form_ville = ville
+        st.session_state.form_ville = gare_label
+        st.session_state.form_gare_stop_id = gare_stop_id
 
         d_sel = st.date_input(
             date_label,
@@ -706,13 +749,13 @@ with tab_dashboard:
         st.session_state.form_date = d_sel
 
         # ── BOUTON RECHERCHE SNCF ──
-        st.markdown("")  # espacement
+        st.markdown("")
         col_search, col_reset = st.columns([3, 1])
         with col_search:
             do_search = st.button(
                 "🔍 Rechercher les trains SNCF",
                 use_container_width=True,
-                disabled=not ville.strip(),
+                disabled=not gare_label.strip(),
                 key="btn_search",
             )
         with col_reset:
@@ -721,23 +764,28 @@ with tab_dashboard:
                     reset_search()
                     st.rerun()
 
-        if do_search and ville.strip():
-            with st.spinner("Recherche en cours…"):
-                # 1. Résoudre la gare de départ/destination
-                stop_id = search_stop_area(ville.strip())
+        if do_search and gare_label.strip():
+            # Si l'utilisateur a sélectionné depuis l'autocomplete on a déjà le stop_id,
+            # sinon on fait un appel /places pour le résoudre.
+            with st.spinner("Recherche des trains…"):
+                stop_id = gare_stop_id
+                if not stop_id:
+                    suggestions = autocomplete_gare(gare_label.strip())
+                    stop_id = suggestions[0][1] if suggestions else None
+
                 if not stop_id:
                     st.session_state.search_done = True
                     st.session_state.search_results = []
-                    st.session_state.search_query_ville = ville.strip()
+                    st.session_state.search_query_ville = gare_label.strip()
                     st.session_state.search_query_date = d_sel
                 else:
-                    from_id = stop_id       if not is_retour else NICE_STOP_ID
-                    to_id   = NICE_STOP_ID  if not is_retour else stop_id
-                    dt_str  = d_sel.strftime("%Y%m%dT050000")  # à partir de 5h
+                    from_id = stop_id      if not is_retour else NICE_STOP_ID
+                    to_id   = NICE_STOP_ID if not is_retour else stop_id
+                    dt_str  = d_sel.strftime("%Y%m%dT050000")
                     trains  = search_trains(from_id, to_id, dt_str)
                     st.session_state.search_done = True
                     st.session_state.search_results = trains
-                    st.session_state.search_query_ville = ville.strip()
+                    st.session_state.search_query_ville = gare_label.strip()
                     st.session_state.search_query_date = d_sel
             st.rerun()
 
@@ -835,12 +883,12 @@ with tab_dashboard:
         col_save, col_cancel = st.columns([2, 1])
         with col_save:
             if st.button("Enregistrer", use_container_width=True, type="primary", key="btn_save"):
-                if not prenom or not ville or not d_sel or not h_dep or not h_arr:
+                if not prenom or not gare_label.strip() or not d_sel or not h_dep or not h_arr:
                     st.error("Remplis tous les champs obligatoires.")
                 else:
                     data = {
                         "prenom":        prenom.strip(),
-                        "ville_depart":  ville.strip(),
+                        "ville_depart":  gare_label.strip(),
                         "date_arrivee":  d_sel.strftime("%Y-%m-%d"),
                         "heure_depart":  h_dep.strftime("%H:%M"),
                         "heure_arrivee": h_arr.strftime("%H:%M"),
