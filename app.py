@@ -4,7 +4,7 @@ from datetime import datetime, date
 import time
 
 # ─────────────────────────────────────────────
-# CONFIG — à remplir avec tes clés Supabase
+# CONFIG
 # ─────────────────────────────────────────────
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -16,33 +16,20 @@ def get_supabase():
 supabase = get_supabase()
 
 # ─────────────────────────────────────────────
-# CSS CUSTOM
+# CSS
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-/* Header hero */
 .hero {
     background: linear-gradient(160deg, #0c4a6e 0%, #075985 60%, #0ea5e9 100%);
     border-radius: 18px;
-    padding: 28px 28px 36px;
+    padding: 28px 28px 32px;
     color: white;
-    margin-bottom: 24px;
-    position: relative;
-    overflow: hidden;
-}
-.hero::after {
-    content: '';
-    position: absolute;
-    bottom: -16px; left: -10%; right: -10%;
-    height: 36px;
-    background: #f0f7ff;
-    border-radius: 50%;
+    margin-bottom: 16px;
 }
 .hero-eyebrow {
     font-family: 'DM Mono', monospace;
@@ -59,39 +46,8 @@ html, body, [class*="css"] {
     margin: 0 0 6px 0;
     line-height: 1.1;
 }
-.hero-sub {
-    font-size: 14px;
-    opacity: 0.8;
-    margin: 0;
-}
+.hero-sub { font-size: 14px; opacity: 0.8; margin: 0; }
 
-/* Stats bar */
-.stats-row {
-    display: flex;
-    gap: 12px;
-    margin-top: 18px;
-    flex-wrap: wrap;
-}
-.stat-chip {
-    background: rgba(255,255,255,0.12);
-    backdrop-filter: blur(8px);
-    border-radius: 10px;
-    padding: 8px 16px;
-    min-width: 80px;
-}
-.stat-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1;
-}
-.stat-label {
-    font-size: 11px;
-    opacity: 0.75;
-    margin-top: 2px;
-}
-
-/* Compte à rebours */
 .countdown-box {
     background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
     border-radius: 14px;
@@ -111,16 +67,8 @@ html, body, [class*="css"] {
     opacity: 0.8;
     margin-bottom: 4px;
 }
-.countdown-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    font-weight: 700;
-}
-.countdown-detail {
-    font-size: 12px;
-    opacity: 0.8;
-    margin-top: 2px;
-}
+.countdown-name { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; }
+.countdown-detail { font-size: 12px; opacity: 0.8; margin-top: 2px; }
 .countdown-time {
     font-family: 'DM Mono', monospace;
     font-size: 32px;
@@ -128,14 +76,8 @@ html, body, [class*="css"] {
     text-align: right;
     line-height: 1;
 }
-.countdown-sublabel {
-    font-size: 10px;
-    opacity: 0.65;
-    text-align: right;
-    margin-top: 3px;
-}
+.countdown-sublabel { font-size: 10px; opacity: 0.65; text-align: right; margin-top: 3px; }
 
-/* Carte membre */
 .membre-card {
     background: white;
     border-radius: 14px;
@@ -143,24 +85,15 @@ html, body, [class*="css"] {
     margin-bottom: 10px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
     border-left: 4px solid #e2e8f0;
-    position: relative;
 }
-.membre-card.arrive   { border-left-color: #10b981; }
-.membre-card.en_route { border-left-color: #f59e0b; }
+.membre-card.arrive    { border-left-color: #10b981; }
+.membre-card.en_route  { border-left-color: #f59e0b; }
 .membre-card.pas_parti { border-left-color: #94a3b8; }
+.membre-card.retour    { border-left-color: #8b5cf6; }
 
-.membre-top {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.membre-nom {
-    font-family: 'Playfair Display', serif;
-    font-size: 17px;
-    font-weight: 700;
-    color: #0f172a;
-}
+.membre-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.membre-nom { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: #0f172a; }
+
 .badge {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
@@ -169,39 +102,35 @@ html, body, [class*="css"] {
     border-radius: 20px;
     letter-spacing: 0.03em;
 }
-.badge-arrive   { background: #ecfdf5; color: #10b981; }
-.badge-en_route { background: #fffbeb; color: #f59e0b; }
+.badge-arrive    { background: #ecfdf5; color: #10b981; }
+.badge-en_route  { background: #fffbeb; color: #f59e0b; }
 .badge-pas_parti { background: #f1f5f9; color: #94a3b8; }
+.badge-retour    { background: #f5f3ff; color: #8b5cf6; }
 
-.membre-trajet {
-    font-size: 13px;
-    color: #64748b;
-    margin-top: 3px;
-}
-.membre-horaires {
+.direction-tag {
     font-family: 'DM Mono', monospace;
-    font-size: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.membre-trajet { font-size: 13px; color: #64748b; margin-top: 3px; }
+.membre-horaires { font-family: 'DM Mono', monospace; font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+.section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: #94a3b8;
-    margin-top: 2px;
+    margin: 20px 0 10px 2px;
 }
 
-/* Formulaire */
-.form-box {
-    background: white;
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 0 0 2px #f97316, 0 4px 20px rgba(0,0,0,0.08);
-    margin-bottom: 24px;
-}
-.form-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 18px;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 16px;
-}
-
-/* Vide */
 .empty-state {
     text-align: center;
     padding: 48px 24px;
@@ -210,22 +139,14 @@ html, body, [class*="css"] {
     color: #94a3b8;
 }
 .empty-icon { font-size: 40px; margin-bottom: 12px; }
-.empty-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 18px;
-    color: #475569;
-    margin-bottom: 6px;
-}
+.empty-title { font-family: 'Playfair Display', serif; font-size: 18px; color: #475569; margin-bottom: 6px; }
 
-/* Override Streamlit */
 .stButton > button {
     border-radius: 8px !important;
     font-weight: 600 !important;
     font-family: 'DM Sans', sans-serif !important;
 }
-[data-testid="stAppViewContainer"] {
-    background: #f0f7ff;
-}
+[data-testid="stAppViewContainer"] { background: #f0f7ff; }
 [data-testid="stHeader"] { background: transparent; }
 .block-container { padding-top: 1rem !important; }
 </style>
@@ -233,7 +154,7 @@ html, body, [class*="css"] {
 
 
 # ─────────────────────────────────────────────
-# HELPERS
+# HELPERS SUPABASE
 # ─────────────────────────────────────────────
 def get_membres():
     res = supabase.table("membres").select("*").order("date_arrivee").order("heure_arrivee").execute()
@@ -249,6 +170,10 @@ def update_statut(membre_id: str, statut: str):
 def delete_membre(membre_id: str):
     supabase.table("membres").delete().eq("id", membre_id).execute()
 
+
+# ─────────────────────────────────────────────
+# LOGIQUE STATUT
+# ─────────────────────────────────────────────
 def compute_statut(membre: dict) -> str:
     if membre["statut"] == "arrive":
         return "arrive"
@@ -267,11 +192,25 @@ def compute_statut(membre: dict) -> str:
         return "en_route"
     return "arrive"
 
-STATUT_CONFIG = {
-    "pas_parti": {"label": "Pas encore parti",  "icon": "🏠", "badge": "badge-pas_parti", "card": "pas_parti"},
-    "en_route":  {"label": "En route",           "icon": "🚄", "badge": "badge-en_route",  "card": "en_route"},
-    "arrive":    {"label": "Arrivé·e !",          "icon": "🎉", "badge": "badge-arrive",    "card": "arrive"},
-}
+def get_badge_class(statut: str, direction: str) -> str:
+    if direction == "retour":
+        return "badge-retour"
+    return f"badge-{statut}"
+
+def get_badge_label(statut: str, direction: str) -> str:
+    if direction == "retour" and statut == "pas_parti":
+        return "Pas encore reparti"
+    labels = {
+        "pas_parti": "Pas encore parti",
+        "en_route": "En route",
+        "arrive": "Arrivé·e !",
+    }
+    return labels.get(statut, statut)
+
+def get_card_class(statut: str, direction: str) -> str:
+    if direction == "retour" and statut in ("pas_parti", "en_route"):
+        return "retour"
+    return statut
 
 def format_countdown(membre: dict) -> str:
     try:
@@ -294,32 +233,43 @@ def format_countdown(membre: dict) -> str:
     except Exception:
         return "—"
 
+def fmt_date(date_str: str) -> str:
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").strftime("%-d %b")
+    except Exception:
+        return ""
+
 
 # ─────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────
-if "my_id" not in st.session_state:
-    st.session_state.my_id = None
+if "my_ids" not in st.session_state:
+    # Liste des IDs de trajets appartenant à cet utilisateur
+    st.session_state.my_ids = []
 if "show_form" not in st.session_state:
     st.session_state.show_form = False
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
 
 
 # ─────────────────────────────────────────────
 # DONNÉES
 # ─────────────────────────────────────────────
 membres = get_membres()
-nb_total   = len(membres)
-nb_arrives = sum(1 for m in membres if compute_statut(m) == "arrive")
-nb_route   = sum(1 for m in membres if compute_statut(m) == "en_route")
-nb_attente = nb_total - nb_arrives - nb_route
+
+allers  = [m for m in membres if m.get("direction", "aller") == "aller"]
+retours = [m for m in membres if m.get("direction") == "retour"]
+
+# Stats sur les allers uniquement (arrivées à Nice)
+nb_arrives = sum(1 for m in allers if compute_statut(m) == "arrive")
+nb_route   = sum(1 for m in allers if compute_statut(m) == "en_route")
+nb_attente = len(allers) - nb_arrives - nb_route
 
 en_route_sorted = sorted(
-    [m for m in membres if compute_statut(m) == "en_route"],
-    key=lambda m: m["heure_arrivee"]
+    [m for m in allers if compute_statut(m) == "en_route"],
+    key=lambda m: (m.get("date_arrivee", ""), m["heure_arrivee"])
 )
 prochain = en_route_sorted[0] if en_route_sorted else None
+
+my_prenoms = {m["prenom"] for m in membres if m["id"] in st.session_state.my_ids}
 
 
 # ─────────────────────────────────────────────
@@ -333,62 +283,87 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-if nb_total > 0:
+if allers:
     col1, col2, col3 = st.columns(3)
-    col1.metric("🟢 Arrivé·e·s", nb_arrives)
-    col2.metric("🟡 En route", nb_route)
-    col3.metric("⚪ Pas encore partis", nb_attente)
+    col1.metric("Arrivé·e·s", f"{nb_arrives} ✅")
+    col2.metric("En route", f"{nb_route} 🚄")
+    col3.metric("Pas encore partis", f"{nb_attente} 🏠")
 
 
 # ─────────────────────────────────────────────
 # FORMULAIRE
 # ─────────────────────────────────────────────
-if not st.session_state.my_id:
-    if not st.session_state.show_form:
-        if st.button("＋ Ajouter mon trajet", use_container_width=True, type="primary"):
-            st.session_state.show_form = True
-            st.rerun()
+def render_formulaire():
+    direction = st.radio(
+        "Type de trajet",
+        ["Aller — vers Nice", "Retour — depuis Nice"],
+        horizontal=True
+    )
+    is_retour = direction.startswith("Retour")
+
+    prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
+
+    if is_retour:
+        ville_label = "Destination *"
+        ville_placeholder = "ex. Paris Gare de Lyon"
+        date_label = "Date de départ depuis Nice *"
+        dep_label = "Heure de départ de Nice *"
+        arr_label = "Heure d'arrivée *"
     else:
-        st.markdown('<div class="form-box"><div class="form-title">Mon trajet vers Nice</div></div>', unsafe_allow_html=True)
+        ville_label = "Ville de départ *"
+        ville_placeholder = "ex. Paris Gare de Lyon"
+        date_label = "Date d'arrivée à Nice *"
+        dep_label = "Heure de départ *"
+        arr_label = "Heure d'arrivée à Nice *"
 
-        with st.container():
-            prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
-            ville  = st.text_input("Ville de départ *", placeholder="ex. Paris Gare de Lyon")
-            d_arr  = st.date_input("Date d'arrivée à Nice *", value=None, min_value=date.today())
-            col1, col2 = st.columns(2)
-            with col1:
-                h_dep = st.time_input("Heure de départ *", value=None)
-            with col2:
-                h_arr = st.time_input("Heure d'arrivée à Nice *", value=None)
-            train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
+    ville = st.text_input(ville_label, placeholder=ville_placeholder)
+    d_arr = st.date_input(date_label, value=None, min_value=date.today())
 
-            col_save, col_cancel = st.columns([2, 1])
-            with col_save:
-                if st.button("Enregistrer mon trajet", use_container_width=True, type="primary"):
-                    if not prenom or not ville or not d_arr or not h_dep or not h_arr:
-                        st.error("Remplis tous les champs obligatoires.")
-                    else:
-                        data = {
-                            "prenom": prenom.strip(),
-                            "ville_depart": ville.strip(),
-                            "date_arrivee": d_arr.strftime("%Y-%m-%d"),
-                            "heure_depart": h_dep.strftime("%H:%M"),
-                            "heure_arrivee": h_arr.strftime("%H:%M"),
-                            "numero_train": train.strip() or None,
-                            "statut": "pas_parti",
-                        }
-                        result = add_membre(data)
-                        if result:
-                            st.session_state.my_id = result["id"]
-                            st.session_state.show_form = False
-                            st.success(f"Trajet de {prenom} enregistré !")
-                            st.rerun()
-                        else:
-                            st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
-            with col_cancel:
-                if st.button("Annuler", use_container_width=True):
+    col1, col2 = st.columns(2)
+    with col1:
+        h_dep = st.time_input(dep_label, value=None)
+    with col2:
+        h_arr = st.time_input(arr_label, value=None)
+
+    train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
+
+    col_save, col_cancel = st.columns([2, 1])
+    with col_save:
+        if st.button("Enregistrer", use_container_width=True, type="primary"):
+            if not prenom or not ville or not d_arr or not h_dep or not h_arr:
+                st.error("Remplis tous les champs obligatoires.")
+            else:
+                data = {
+                    "prenom": prenom.strip(),
+                    "ville_depart": ville.strip(),
+                    "date_arrivee": d_arr.strftime("%Y-%m-%d"),
+                    "heure_depart": h_dep.strftime("%H:%M"),
+                    "heure_arrivee": h_arr.strftime("%H:%M"),
+                    "numero_train": train.strip() or None,
+                    "statut": "pas_parti",
+                    "direction": "retour" if is_retour else "aller",
+                }
+                result = add_membre(data)
+                if result:
+                    st.session_state.my_ids.append(result["id"])
                     st.session_state.show_form = False
+                    st.success(f"Trajet de {prenom} enregistré !")
                     st.rerun()
+                else:
+                    st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
+    with col_cancel:
+        if st.button("Annuler", use_container_width=True):
+            st.session_state.show_form = False
+            st.rerun()
+
+# Bouton d'ajout — toujours visible (on peut avoir plusieurs trajets)
+if not st.session_state.show_form:
+    st.button("＋ Ajouter un trajet", use_container_width=True, type="primary",
+              on_click=lambda: st.session_state.update(show_form=True))
+else:
+    with st.container(border=True):
+        st.markdown("**Mon trajet**")
+        render_formulaire()
 
 
 # ─────────────────────────────────────────────
@@ -396,11 +371,11 @@ if not st.session_state.my_id:
 # ─────────────────────────────────────────────
 if prochain:
     countdown = format_countdown(prochain)
-    date_str = datetime.strptime(prochain["date_arrivee"], "%Y-%m-%d").strftime("%-d %b") if prochain.get("date_arrivee") else ""
+    date_str = fmt_date(prochain.get("date_arrivee", ""))
     st.markdown(f"""
     <div class="countdown-box">
         <div class="countdown-left">
-            <div class="eyebrow">Prochaine arrivée</div>
+            <div class="eyebrow">Prochaine arrivée à Nice</div>
             <div class="countdown-name">{prochain['prenom']}</div>
             <div class="countdown-detail">{prochain['ville_depart']} → Nice · {date_str} {prochain['heure_arrivee']}</div>
         </div>
@@ -415,6 +390,51 @@ if prochain:
 # ─────────────────────────────────────────────
 # LISTE DES MEMBRES
 # ─────────────────────────────────────────────
+def render_trajet(m: dict):
+    statut    = compute_statut(m)
+    direction = m.get("direction", "aller")
+    card_cls  = get_card_class(statut, direction)
+    badge_cls = get_badge_class(statut, direction)
+    badge_lbl = get_badge_label(statut, direction)
+    train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
+    date_str  = fmt_date(m.get("date_arrivee", ""))
+    dir_tag   = "RETOUR" if direction == "retour" else "ALLER"
+    icon      = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+
+    if direction == "retour":
+        trajet_str = f"Nice → {m['ville_depart']}"
+    else:
+        trajet_str = f"{m['ville_depart']} → Nice"
+
+    st.markdown(f"""
+    <div class="membre-card {card_cls}">
+        <div class="membre-top">
+            <span style="font-size:20px">{icon}</span>
+            <span class="membre-nom">{m['prenom']}</span>
+            <span class="badge {badge_cls}">{badge_lbl}</span>
+            <span class="direction-tag">{dir_tag}</span>
+        </div>
+        <div class="membre-trajet">{trajet_str}</div>
+        <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Boutons si c'est mon trajet
+    if m["id"] in st.session_state.my_ids:
+        c1, c2, _ = st.columns([1.5, 1, 2])
+        with c1:
+            if statut != "arrive":
+                label = "🎉 Je suis arrivé·e !" if direction == "aller" else "🎉 Je suis rentré·e !"
+                if st.button(label, key=f"arr_{m['id']}", use_container_width=True):
+                    update_statut(m["id"], "arrive")
+                    st.rerun()
+        with c2:
+            if st.button("Supprimer", key=f"del_{m['id']}", use_container_width=True):
+                delete_membre(m["id"])
+                st.session_state.my_ids.remove(m["id"])
+                st.rerun()
+
+
 if not membres:
     st.markdown("""
     <div class="empty-state">
@@ -424,37 +444,15 @@ if not membres:
     </div>
     """, unsafe_allow_html=True)
 else:
-    for m in membres:
-        statut = compute_statut(m)
-        cfg = STATUT_CONFIG[statut]
-        train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
-        date_str = datetime.strptime(m["date_arrivee"], "%Y-%m-%d").strftime("%-d %b") if m.get("date_arrivee") else ""
+    if allers:
+        st.markdown('<div class="section-title">Arrivées à Nice</div>', unsafe_allow_html=True)
+        for m in allers:
+            render_trajet(m)
 
-        st.markdown(f"""
-        <div class="membre-card {cfg['card']}">
-            <div class="membre-top">
-                <span style="font-size:20px">{cfg['icon']}</span>
-                <span class="membre-nom">{m['prenom']}</span>
-                <span class="badge {cfg['badge']}">{cfg['label']}</span>
-            </div>
-            <div class="membre-trajet">{m['ville_depart']} → Nice</div>
-            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Boutons d'action si c'est mon trajet
-        if m["id"] == st.session_state.my_id:
-            col_arr, col_del, _ = st.columns([1.5, 1, 2])
-            with col_arr:
-                if statut != "arrive":
-                    if st.button("🎉 Je suis arrivé·e !", key=f"arr_{m['id']}", use_container_width=True):
-                        update_statut(m["id"], "arrive")
-                        st.rerun()
-            with col_del:
-                if st.button("Supprimer", key=f"del_{m['id']}", use_container_width=True):
-                    delete_membre(m["id"])
-                    st.session_state.my_id = None
-                    st.rerun()
+    if retours:
+        st.markdown('<div class="section-title">Retours</div>', unsafe_allow_html=True)
+        for m in retours:
+            render_trajet(m)
 
 
 # ─────────────────────────────────────────────
