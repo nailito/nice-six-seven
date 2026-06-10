@@ -14,7 +14,7 @@ SUPABASE_URL  = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
 SNCF_API_KEY  = st.secrets["SNCF_API_KEY"]
 
-SNCF_BASE     = "https://api.sncf.com/v1/coverage/sncf"
+SNCF_BASE = "https://api.sncf.com/v1/coverage/france"
 NICE_STOP_ID  = "stop_area:OCE:SA:87756056"   # Nice-Ville
 
 WEEKEND_START = date(2026, 7, 24)
@@ -359,7 +359,7 @@ def autocomplete_gare(query: str) -> list[tuple[str, str]]:
     for place in data["places"]:
         name    = place.get("name", "")
         stop_id = place.get("id", "")
-        admin   = place.get("administrative_regions", [])
+        admin = place.get("administrative_regions") or []
         context = admin[0].get("name", "") if admin else ""
         label   = f"{name} — {context}" if context and context.lower() not in name.lower() else name
         if stop_id:
@@ -381,7 +381,7 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
         "datetime_represents": "departure",
         "count": 8,
         "min_nb_journeys": 3,
-        "data_freshness": "base_schedule",
+        "data_freshness": "realtime",
     })
     if not data or not data.get("journeys"):
         return []
