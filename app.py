@@ -358,10 +358,10 @@ def sncf_get(endpoint: str, params: dict = None) -> dict | None:
         )
         if r.status_code == 200:
             return r.json()
-        st.warning(f"🔴 API SNCF {r.status_code} — {r.url}\n{r.text[:300]}")  # debug
+        print(f"[SNCF] {r.status_code} — {r.url} — {r.text[:200]}")
         return None
     except requests.exceptions.RequestException as e:
-        st.warning(f"🔴 Requête SNCF échouée : {e}")  # debug
+        print(f"[SNCF] Exception : {e}")
         return None
 
 
