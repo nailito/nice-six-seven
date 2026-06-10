@@ -325,33 +325,19 @@ prochain = en_route_sorted[0] if en_route_sorted else None
 # ─────────────────────────────────────────────
 # HERO
 # ─────────────────────────────────────────────
-stats_html = ""
-if nb_total > 0:
-    stats_html = f"""
-    <div class="stats-row">
-        <div class="stat-chip">
-            <div class="stat-val" style="color:#10b981">{nb_arrives}</div>
-            <div class="stat-label">arrivé·e·s</div>
-        </div>
-        <div class="stat-chip">
-            <div class="stat-val" style="color:#f59e0b">{nb_route}</div>
-            <div class="stat-label">en route</div>
-        </div>
-        <div class="stat-chip">
-            <div class="stat-val" style="color:#94a3b8">{nb_attente}</div>
-            <div class="stat-label">pas encore partis</div>
-        </div>
-    </div>
-    """
-
-st.markdown(f"""
+st.markdown("""
 <div class="hero">
     <div class="hero-eyebrow">Vacances d'été 2025</div>
     <h1 class="hero-title">On arrive à Nice ☀️</h1>
     <p class="hero-sub">Suis les arrivées de toute la bande en temps réel</p>
-    {stats_html}
 </div>
 """, unsafe_allow_html=True)
+
+if nb_total > 0:
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🟢 Arrivé·e·s", nb_arrives)
+    col2.metric("🟡 En route", nb_route)
+    col3.metric("⚪ Pas encore partis", nb_attente)
 
 
 # ─────────────────────────────────────────────
