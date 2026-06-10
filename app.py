@@ -15,6 +15,32 @@ SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
 SNCF_API_KEY  = st.secrets["SNCF_API_KEY"]
 
 SNCF_BASE = "https://api.sncf.com/v1/coverage/sncf"
+
+
+with st.sidebar:
+    st.markdown("### 🔧 Debug API")
+    test_query = st.text_input("Gare à tester", value="Paris", key="debug_q")
+    if st.button("Test direct API SNCF", key="debug_btn"):
+        try:
+            r = requests.get(
+                f"{SNCF_BASE}/places",
+                params={"q": test_query, "type[]": "stop_area", "count": 3},
+                auth=(SNCF_API_KEY, ""),
+                timeout=8,
+            )
+            st.write(f"**Status:** `{r.status_code}`")
+            st.write(f"**URL:** `{r.url}`")
+            if r.status_code == 200:
+                st.json(r.json())
+            else:
+                st.code(r.text[:800])
+        except Exception as e:
+            st.error(f"Exception : {e}")
+    
+    if st.button("Vider cache", key="clear_cache_sidebar"):
+        st.cache_data.clear()
+        st.success("Cache vidé")
+
 NICE_STOP_ID  = "stop_area:OCE:SA:87756056"   # Nice-Ville
 
 WEEKEND_START = date(2026, 7, 24)
