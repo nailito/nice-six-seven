@@ -236,7 +236,7 @@ html, body, [class*="css"] {
 # HELPERS
 # ─────────────────────────────────────────────
 def get_membres():
-    res = supabase.table("membres").select("*").order("heure_arrivee").execute()
+    res = supabase.table("membres").select("*").order("date_arrivee").order("heure_arrivee").execute()
     return res.data or []
 
 def add_membre(data: dict):
@@ -252,15 +252,18 @@ def delete_membre(membre_id: str):
 def compute_statut(membre: dict) -> str:
     if membre["statut"] == "arrive":
         return "arrive"
-    now = datetime.now().time()
+    now = datetime.now()
     try:
+        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() if membre.get("date_arrivee") else now.date()
         h_dep = datetime.strptime(membre["heure_depart"], "%H:%M").time()
         h_arr = datetime.strptime(membre["heure_arrivee"], "%H:%M").time()
+        dt_dep = datetime.combine(date_arr, h_dep)
+        dt_arr = datetime.combine(date_arr, h_arr)
     except Exception:
         return membre["statut"]
-    if now < h_dep:
+    if now < dt_dep:
         return "pas_parti"
-    if h_dep <= now < h_arr:
+    if dt_dep <= now < dt_arr:
         return "en_route"
     return "arrive"
 
@@ -270,16 +273,19 @@ STATUT_CONFIG = {
     "arrive":    {"label": "Arrivé·e !",          "icon": "🎉", "badge": "badge-arrive",    "card": "arrive"},
 }
 
-def format_countdown(heure_str: str) -> str:
+def format_countdown(membre: dict) -> str:
     try:
-        today = date.today()
-        target = datetime.combine(today, datetime.strptime(heure_str, "%H:%M").time())
+        date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() if membre.get("date_arrivee") else date.today()
+        target = datetime.combine(date_arr, datetime.strptime(membre["heure_arrivee"], "%H:%M").time())
         delta = target - datetime.now()
         if delta.total_seconds() <= 0:
             return "maintenant"
         total_s = int(delta.total_seconds())
         h, rem = divmod(total_s, 3600)
         m, s = divmod(rem, 60)
+        if h >= 24:
+            jours = h // 24
+            return f"{jours}j {h % 24}h"
         if h > 0:
             return f"{h}h {m:02d}m"
         if m > 0:
@@ -362,22 +368,24 @@ if not st.session_state.my_id:
         with st.container():
             prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
             ville  = st.text_input("Ville de départ *", placeholder="ex. Paris Gare de Lyon")
+            d_arr  = st.date_input("Date d'arrivée à Nice *", value=None, min_value=date.today())
             col1, col2 = st.columns(2)
             with col1:
-                h_dep = st.time_input("Départ *", value=None)
+                h_dep = st.time_input("Heure de départ *", value=None)
             with col2:
-                h_arr = st.time_input("Arrivée à Nice *", value=None)
+                h_arr = st.time_input("Heure d'arrivée à Nice *", value=None)
             train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
 
             col_save, col_cancel = st.columns([2, 1])
             with col_save:
                 if st.button("Enregistrer mon trajet", use_container_width=True, type="primary"):
-                    if not prenom or not ville or not h_dep or not h_arr:
+                    if not prenom or not ville or not d_arr or not h_dep or not h_arr:
                         st.error("Remplis tous les champs obligatoires.")
                     else:
                         data = {
                             "prenom": prenom.strip(),
                             "ville_depart": ville.strip(),
+                            "date_arrivee": d_arr.strftime("%Y-%m-%d"),
                             "heure_depart": h_dep.strftime("%H:%M"),
                             "heure_arrivee": h_arr.strftime("%H:%M"),
                             "numero_train": train.strip() or None,
@@ -401,13 +409,14 @@ if not st.session_state.my_id:
 # COMPTE À REBOURS
 # ─────────────────────────────────────────────
 if prochain:
-    countdown = format_countdown(prochain["heure_arrivee"])
+    countdown = format_countdown(prochain)
+    date_str = datetime.strptime(prochain["date_arrivee"], "%Y-%m-%d").strftime("%-d %b") if prochain.get("date_arrivee") else ""
     st.markdown(f"""
     <div class="countdown-box">
         <div class="countdown-left">
             <div class="eyebrow">Prochaine arrivée</div>
             <div class="countdown-name">{prochain['prenom']}</div>
-            <div class="countdown-detail">{prochain['ville_depart']} → Nice · {prochain['heure_arrivee']}</div>
+            <div class="countdown-detail">{prochain['ville_depart']} → Nice · {date_str} {prochain['heure_arrivee']}</div>
         </div>
         <div>
             <div class="countdown-time">{countdown}</div>
@@ -433,6 +442,7 @@ else:
         statut = compute_statut(m)
         cfg = STATUT_CONFIG[statut]
         train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
+        date_str = datetime.strptime(m["date_arrivee"], "%Y-%m-%d").strftime("%-d %b") if m.get("date_arrivee") else ""
 
         st.markdown(f"""
         <div class="membre-card {cfg['card']}">
@@ -442,7 +452,7 @@ else:
                 <span class="badge {cfg['badge']}">{cfg['label']}</span>
             </div>
             <div class="membre-trajet">{m['ville_depart']} → Nice</div>
-            <div class="membre-horaires">🚆 {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
+            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}</div>
         </div>
         """, unsafe_allow_html=True)
 
