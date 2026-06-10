@@ -760,11 +760,11 @@ with tab_dashboard:
         )
 
         # selected_gare est soit un tuple (label, stop_id) soit une str saisie libre
-    if isinstance(selected_gare, str) and selected_gare.strip():
-        gare_label   = selected_gare
-        gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
-    else:
-        gare_label, gare_stop_id = "", None
+        if isinstance(selected_gare, str) and selected_gare.strip():
+            gare_label   = selected_gare
+            gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
+        else:
+            gare_label, gare_stop_id = "", None
 
         # Reset la recherche si la gare change
         if gare_label != st.session_state.form_ville:
