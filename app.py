@@ -344,24 +344,22 @@ def fmt_date(date_str: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# CALENDRIER HTML
+# CALENDRIER — rendu via iframe (évite la sanitisation Streamlit)
 # ─────────────────────────────────────────────
 def render_calendrier(membres: list):
-    # Construire index date -> liste de trajets
+    import streamlit.components.v1 as components
+
     by_date: dict = {}
     for m in membres:
         d = m.get("date_arrivee")
         if d:
             by_date.setdefault(d, []).append(m)
 
-    # Juillet 2026
     year, month = 2026, 7
     today = date.today()
     cal = calendar.monthcalendar(year, month)
     jours_fr = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"]
-    mois_fr  = "Juillet 2026"
-
-    weekend_days = {24, 25, 26, 27}  # ven-lun du weekend
+    weekend_days = {24, 25, 26, 27}
 
     grid_html = ""
     for dow in jours_fr:
@@ -384,40 +382,89 @@ def render_calendrier(membres: list):
                 classes += " today"
 
             dots_html = ""
+            noms_html = ""
             if trajets:
                 dots_html = '<div class="cal-dots">'
                 for t in trajets:
                     dot_cls = "dot-retour" if t.get("direction") == "retour" else "dot-aller"
-                    dots_html += f'<span class="dot {dot_cls}" title="{t["prenom"]}"></span>'
+                    prenom_safe = t["prenom"].replace('"', '')
+                    dots_html += f'<span class="dot {dot_cls}" title="{prenom_safe}"></span>'
                 dots_html += "</div>"
+                prenoms = " ".join(t["prenom"][:4] for t in trajets[:3])
+                noms_html = f'<div class="cal-noms">{prenoms}</div>'
 
-            # Noms en petit sous le numéro
-            noms = ""
-            if trajets:
-                prenoms = [t["prenom"][:3] for t in trajets[:3]]
-                noms = f'<div style="font-size:9px;color:#64748b;line-height:1.1;margin-top:1px">{" ".join(prenoms)}</div>'
+            grid_html += f'<div class="{classes}"><div class="cal-day-num">{day_num}</div>{dots_html}{noms_html}</div>'
 
-            grid_html += f"""
-            <div class="{classes}">
-                <div class="cal-day-num">{day_num}</div>
-                {dots_html}
-                {noms}
-            </div>"""
+    full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=DM+Mono:wght@500&family=Playfair+Display:wght@700&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'DM Sans', sans-serif; background: white; padding: 20px; border-radius: 16px; }}
+  h2 {{ font-family: 'Playfair Display', serif; font-size: 20px; color: #0f172a; margin-bottom: 16px; }}
+  .cal-grid {{
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    text-align: center;
+  }}
+  .cal-dow {{
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    padding: 4px 0;
+    letter-spacing: 0.05em;
+  }}
+  .cal-day {{
+    font-size: 12px;
+    padding: 5px 2px;
+    border-radius: 8px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 5px;
+    background: #f8fafc;
+  }}
+  .cal-day.empty {{ background: transparent; }}
+  .cal-day.weekend-bg {{ background: #eff6ff; }}
+  .cal-day.today {{ outline: 2px solid #0ea5e9; }}
+  .cal-day-num {{ font-weight: 700; color: #0f172a; font-size: 13px; }}
+  .cal-day.weekend-bg .cal-day-num {{ color: #0284c7; }}
+  .cal-dots {{ display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 3px; }}
+  .dot {{ width: 7px; height: 7px; border-radius: 50%; display: inline-block; }}
+  .dot-aller  {{ background: #0ea5e9; }}
+  .dot-retour {{ background: #8b5cf6; }}
+  .cal-noms {{ font-size: 9px; color: #64748b; margin-top: 2px; line-height: 1.2; }}
+  .legend {{
+    display: flex; gap: 16px; margin-top: 14px;
+    font-size: 12px; color: #475569; align-items: center; flex-wrap: wrap;
+  }}
+  .legend span {{ display: flex; align-items: center; gap: 5px; }}
+  .ldot {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }}
+  .weekend-badge {{
+    background: #eff6ff; padding: 2px 10px; border-radius: 20px;
+    font-size: 11px; color: #0284c7; font-weight: 700;
+  }}
+</style>
+</head>
+<body>
+  <h2>📅 Juillet 2026</h2>
+  <div class="cal-grid">{grid_html}</div>
+  <div class="legend">
+    <span><span class="ldot" style="background:#0ea5e9"></span> Aller vers Nice</span>
+    <span><span class="ldot" style="background:#8b5cf6"></span> Retour</span>
+    <span class="weekend-badge">Weekend 24–27 juillet</span>
+  </div>
+</body>
+</html>"""
 
-    legend = """
-    <div class="cal-legend">
-        <span><span class="legend-dot" style="background:#0ea5e9;display:inline-block"></span> Aller vers Nice</span>
-        <span><span class="legend-dot" style="background:#8b5cf6;display:inline-block"></span> Retour</span>
-        <span style="background:#eff6ff;padding:2px 8px;border-radius:6px;font-size:11px;color:#0284c7;font-weight:600">Weekend 24-27 juillet</span>
-    </div>"""
-
-    st.markdown(f"""
-    <div class="cal-wrap">
-        <div class="cal-header">📅 {mois_fr}</div>
-        <div class="cal-grid">{grid_html}</div>
-        {legend}
-    </div>
-    """, unsafe_allow_html=True)
+    components.html(full_html, height=380, scrolling=False)
 
 
 # ─────────────────────────────────────────────
