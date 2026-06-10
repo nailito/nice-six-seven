@@ -975,7 +975,7 @@ with tab_dashboard:
             """, unsafe_allow_html=True)
 
         train = st.text_input(
-            "Numéro de train (optionnel)",
+            "n°voiture et n°place (optionnel)",
             value=st.session_state.form_train,
             placeholder="ex. TGV 6173",
             key="input_train",
