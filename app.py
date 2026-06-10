@@ -371,6 +371,12 @@ _gare_id_map: dict[str, str] = {}
 def autocomplete_gare(query: str) -> list[str]:
     if not query or len(query.strip()) < 2:
         return []
+    
+    # Cache dans session_state (survit aux reruns)
+    cache_key = f"_gare_cache_{query.strip().lower()}"
+    if cache_key in st.session_state:
+        return st.session_state[cache_key]
+    
     data = sncf_get("places", {
         "q": query.strip(),
         "type[]": "stop_area",
@@ -380,7 +386,10 @@ def autocomplete_gare(query: str) -> list[str]:
     if not data or not data.get("places"):
         return []
 
-    results = []
+    if "_gare_id_map" not in st.session_state:
+        st.session_state["_gare_id_map"] = {}
+
+    labels = []
     for place in data["places"]:
         name    = place.get("name", "")
         stop_id = place.get("id", "")
@@ -388,9 +397,11 @@ def autocomplete_gare(query: str) -> list[str]:
         context = admin[0].get("name", "") if admin else ""
         label   = f"{name} — {context}" if context and context.lower() not in name.lower() else name
         if stop_id:
-            _gare_id_map[label] = stop_id  # stocke la correspondance
-            results.append(label)          # retourne juste le label
-    return results
+            st.session_state["_gare_id_map"][label] = stop_id
+            labels.append(label)
+
+    st.session_state[cache_key] = labels
+    return labels
 
 @st.cache_data(ttl=300, show_spinner=False)
 def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
@@ -745,15 +756,15 @@ with tab_dashboard:
             label=None,
             default=st.session_state.get("form_gare_tuple"),
             default_use_searchterm=True,
-            edit_after_submit="current",
+            edit_after_submit="option",
         )
 
         # selected_gare est soit un tuple (label, stop_id) soit une str saisie libre
-        if isinstance(selected_gare, str) and selected_gare.strip():
-            gare_label   = selected_gare
-            gare_stop_id = _gare_id_map.get(selected_gare)  # None si saisie libre
-        else:
-            gare_label, gare_stop_id = "", None
+    if isinstance(selected_gare, str) and selected_gare.strip():
+        gare_label   = selected_gare
+        gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
+    else:
+        gare_label, gare_stop_id = "", None
 
         # Reset la recherche si la gare change
         if gare_label != st.session_state.form_ville:
@@ -799,8 +810,8 @@ with tab_dashboard:
             with st.spinner("Recherche des trains…"):
                 stop_id = gare_stop_id
                 if not stop_id:
-                    suggestions = autocomplete_gare(gare_label.strip())
-                    stop_id = suggestions[0][1] if suggestions else None
+                    autocomplete_gare(gare_label.strip())  # peuple le map si besoin
+                    stop_id = st.session_state.get("_gare_id_map", {}).get(gare_label.strip())
 
                 if not stop_id:
                     st.session_state.search_done = True
