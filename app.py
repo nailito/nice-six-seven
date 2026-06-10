@@ -344,7 +344,7 @@ def fmt_date(date_str: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# CALENDRIER — rendu via iframe (évite la sanitisation Streamlit)
+# CALENDRIER — rendu via iframe (ptet zoomer sur le calendrier pour focus le we)
 # ─────────────────────────────────────────────
 def render_calendrier(membres: list):
     import streamlit.components.v1 as components
