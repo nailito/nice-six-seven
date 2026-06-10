@@ -364,14 +364,11 @@ def sncf_get(endpoint: str, params: dict = None) -> dict | None:
         print(f"[SNCF] Exception : {e}")
         return None
 
+# Module-level dict : label affiché → stop_id
+_gare_id_map: dict[str, str] = {}
 
 @lru_cache(maxsize=256)
-def autocomplete_gare(query: str) -> list[tuple[str, str]]:
-    """
-    Autocomplétion de gare via l'API SNCF /places.
-    Retourne une liste de tuples (label affiché, stop_area_id).
-    Cache 1h.
-    """
+def autocomplete_gare(query: str) -> list[str]:
     if not query or len(query.strip()) < 2:
         return []
     data = sncf_get("places", {
@@ -387,13 +384,13 @@ def autocomplete_gare(query: str) -> list[tuple[str, str]]:
     for place in data["places"]:
         name    = place.get("name", "")
         stop_id = place.get("id", "")
-        admin = place.get("administrative_regions") or []
+        admin   = place.get("administrative_regions") or []
         context = admin[0].get("name", "") if admin else ""
         label   = f"{name} — {context}" if context and context.lower() not in name.lower() else name
         if stop_id:
-            results.append((label, stop_id))
+            _gare_id_map[label] = stop_id  # stocke la correspondance
+            results.append(label)          # retourne juste le label
     return results
-
 
 @st.cache_data(ttl=300, show_spinner=False)
 def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
@@ -752,10 +749,9 @@ with tab_dashboard:
         )
 
         # selected_gare est soit un tuple (label, stop_id) soit une str saisie libre
-        if isinstance(selected_gare, tuple):
-            gare_label, gare_stop_id = selected_gare
-        elif isinstance(selected_gare, str):
-            gare_label, gare_stop_id = selected_gare, None
+        if isinstance(selected_gare, str) and selected_gare.strip():
+            gare_label   = selected_gare
+            gare_stop_id = _gare_id_map.get(selected_gare)  # None si saisie libre
         else:
             gare_label, gare_stop_id = "", None
 
