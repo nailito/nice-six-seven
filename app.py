@@ -14,7 +14,7 @@ SUPABASE_URL  = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
 SNCF_API_KEY  = st.secrets["SNCF_API_KEY"]
 
-SNCF_BASE = "https://api.sncf.com/v1/coverage/france"
+SNCF_BASE = "https://api.sncf.com/v1/coverage/sncf"
 NICE_STOP_ID  = "stop_area:OCE:SA:87756056"   # Nice-Ville
 
 WEEKEND_START = date(2026, 7, 24)
@@ -322,7 +322,6 @@ def delete_membre(membre_id: str):
 # API SNCF (Navitia)
 # ─────────────────────────────────────────────
 def sncf_get(endpoint: str, params: dict = None) -> dict | None:
-    """Appel générique à l'API SNCF avec gestion d'erreur."""
     try:
         r = requests.get(
             f"{SNCF_BASE}/{endpoint}",
@@ -332,8 +331,10 @@ def sncf_get(endpoint: str, params: dict = None) -> dict | None:
         )
         if r.status_code == 200:
             return r.json()
+        st.warning(f"🔴 API SNCF {r.status_code} — {r.url}\n{r.text[:300]}")  # debug
         return None
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        st.warning(f"🔴 Requête SNCF échouée : {e}")  # debug
         return None
 
 
@@ -763,6 +764,11 @@ with tab_dashboard:
                 if st.button("✕ Effacer", use_container_width=True, key="btn_clear_search"):
                     reset_search()
                     st.rerun()
+            
+            if st.button("Vider le cache API"):
+                autocomplete_gare.clear()
+                search_trains.clear()
+                st.success("Cache vidé")
 
         if do_search and gare_label.strip():
             # Si l'utilisateur a sélectionné depuis l'autocomplete on a déjà le stop_id,
