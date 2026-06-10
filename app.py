@@ -6,6 +6,7 @@ import calendar
 import requests
 from functools import lru_cache
 from streamlit_searchbox import st_searchbox
+from functools import lru_cache
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -41,7 +42,7 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("Cache vidé")
 
-NICE_STOP_ID  = "stop_area:OCE:SA:87756056"   # Nice-Ville
+NICE_STOP_ID  = "stop_area:SNCF:87756056"   # Nice-Ville
 
 WEEKEND_START = date(2026, 7, 24)
 WEEKEND_END   = date(2026, 7, 27)
@@ -364,7 +365,7 @@ def sncf_get(endpoint: str, params: dict = None) -> dict | None:
         return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@lru_cache(maxsize=256)
 def autocomplete_gare(query: str) -> list[tuple[str, str]]:
     """
     Autocomplétion de gare via l'API SNCF /places.
