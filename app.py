@@ -42,7 +42,7 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("Cache vidé")
 
-    ast.markdown("---")
+    st.markdown("---")
     st.markdown("### 🔧 Debug Journeys")
     if st.button("Test Journeys Paris→Nice", key="debug_journeys"):
         try:
