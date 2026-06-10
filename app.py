@@ -731,6 +731,9 @@ with tab_dashboard:
         else:
             gare_label, gare_stop_id = "", None
 
+        st.write(selected_gare)
+        st.write(type(selected_gare))
+
         # Reset la recherche si la gare change
         if gare_label != st.session_state.form_ville:
             reset_search()
