@@ -1,16 +1,21 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime, date
+from datetime import datetime, date, time as dtime
 import time
 import calendar
+import requests
+from functools import lru_cache
 
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_URL  = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY  = st.secrets["SUPABASE_KEY"]
+SNCF_API_KEY  = st.secrets["SNCF_API_KEY"]
 
-# Date du weekend
+SNCF_BASE     = "https://api.sncf.com/v1/coverage/sncf"
+NICE_STOP_ID  = "stop_area:OCE:SA:87756056"   # Nice-Ville
+
 WEEKEND_START = date(2026, 7, 24)
 WEEKEND_END   = date(2026, 7, 27)
 DATE_DEFAULT  = date(2026, 7, 25)
@@ -21,6 +26,7 @@ def get_supabase():
 
 supabase = get_supabase()
 
+
 # ─────────────────────────────────────────────
 # CSS
 # ─────────────────────────────────────────────
@@ -30,7 +36,6 @@ st.markdown("""
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-/* ── Lisibilité globale des labels Streamlit ── */
 label, .stRadio label, .stTextInput label,
 .stTimeInput label, .stDateInput label,
 p, div, span, [data-testid="stWidgetLabel"] {
@@ -40,13 +45,11 @@ p, div, span, [data-testid="stWidgetLabel"] {
     color: #1e293b !important;
     font-weight: 500 !important;
 }
-/* Radio buttons sélectionnés */
 .stRadio [data-baseweb="radio"] [data-checked="true"] ~ div,
 .stRadio [aria-checked="true"] ~ div span {
     color: #0284c7 !important;
     font-weight: 600 !important;
 }
-/* Tabs */
 .stTabs [data-baseweb="tab"] {
     color: #475569 !important;
     font-weight: 600 !important;
@@ -54,7 +57,6 @@ p, div, span, [data-testid="stWidgetLabel"] {
 .stTabs [aria-selected="true"] {
     color: #0284c7 !important;
 }
-/* Métriques */
 [data-testid="stMetricLabel"] { color: #475569 !important; font-weight: 600 !important; }
 [data-testid="stMetricValue"] { color: #0f172a !important; font-weight: 700 !important; }
 
@@ -165,6 +167,108 @@ p, div, span, [data-testid="stWidgetLabel"] {
     margin: 20px 0 10px 2px;
 }
 
+/* ── Résultats de recherche trains ── */
+.train-result {
+    background: white;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+    cursor: pointer;
+}
+.train-result:hover { border-color: #0ea5e9; }
+.train-result.selected {
+    border-color: #0284c7;
+    background: #f0f9ff;
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+}
+.train-result-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.train-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0284c7;
+    background: #e0f2fe;
+    padding: 2px 10px;
+    border-radius: 20px;
+}
+.train-type {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+.train-direct {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #065f46;
+    background: #d1fae5;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+.train-correspondance {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #92400e;
+    background: #fef3c7;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+.train-horaires {
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+}
+.train-duree {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+.search-info {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #0369a1;
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+.search-error {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #c2410c;
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+.prefill-banner {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #166534;
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
 /* Calendrier custom */
 .cal-wrap {
     background: white;
@@ -173,71 +277,6 @@ p, div, span, [data-testid="stWidgetLabel"] {
     box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
     margin-bottom: 8px;
 }
-.cal-header {
-    font-family: 'Playfair Display', serif;
-    font-size: 18px;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 14px;
-}
-.cal-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    text-align: center;
-}
-.cal-dow {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: uppercase;
-    padding: 4px 0;
-    letter-spacing: 0.05em;
-}
-.cal-day {
-    font-size: 13px;
-    font-weight: 500;
-    color: #334155;
-    padding: 6px 2px;
-    border-radius: 8px;
-    line-height: 1.2;
-    min-height: 42px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding-top: 5px;
-}
-.cal-day.empty { background: transparent; }
-.cal-day.weekend-bg { background: #eff6ff; }
-.cal-day.today { border: 2px solid #0ea5e9; }
-.cal-day-num { font-weight: 700; color: #0f172a; }
-.cal-day.weekend-bg .cal-day-num { color: #0284c7; }
-.cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 2px; }
-.dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-}
-.dot-aller  { background: #0ea5e9; }
-.dot-retour { background: #8b5cf6; }
-.cal-legend {
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-    font-size: 12px;
-    color: #64748b;
-    align-items: center;
-    flex-wrap: wrap;
-}
-.legend-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 4px;
-}
-
 .empty-state {
     text-align: center;
     padding: 48px 24px;
@@ -276,6 +315,102 @@ def update_statut(membre_id: str, statut: str):
 
 def delete_membre(membre_id: str):
     supabase.table("membres").delete().eq("id", membre_id).execute()
+
+
+# ─────────────────────────────────────────────
+# API SNCF (Navitia)
+# ─────────────────────────────────────────────
+def sncf_get(endpoint: str, params: dict = None) -> dict | None:
+    """Appel générique à l'API SNCF avec gestion d'erreur."""
+    try:
+        r = requests.get(
+            f"{SNCF_BASE}/{endpoint}",
+            params=params or {},
+            auth=(SNCF_API_KEY, ""),
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except requests.exceptions.RequestException:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def search_stop_area(query: str) -> str | None:
+    """Résout un nom de gare en stop_area ID Navitia. Cache 1h."""
+    data = sncf_get("places", {"q": query, "type[]": "stop_area", "count": 1})
+    if not data or not data.get("places"):
+        return None
+    return data["places"][0]["id"]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
+    """
+    Recherche les trajets entre deux gares.
+    dt_str format : "20260725T080000"
+    Retourne une liste de dicts normalisés.
+    """
+    data = sncf_get("journeys", {
+        "from": from_id,
+        "to": to_id,
+        "datetime": dt_str,
+        "datetime_represents": "departure",
+        "count": 8,
+        "min_nb_journeys": 3,
+        "data_freshness": "base_schedule",
+    })
+    if not data or not data.get("journeys"):
+        return []
+
+    results = []
+    for j in data["journeys"]:
+        sections = j.get("sections", [])
+
+        # Récupère uniquement les sections de transport (pas les marches)
+        pt_sections = [s for s in sections if s.get("type") == "public_transport"]
+        if not pt_sections:
+            continue
+
+        # Numéro de train : on prend la 1ère section PT (train principal)
+        first_pt = pt_sections[0]
+        disp = first_pt.get("display_informations", {})
+        train_number = disp.get("headsign", "") or disp.get("label", "")
+        train_name   = disp.get("commercial_mode", "") or disp.get("physical_mode", "")
+
+        # Heures départ / arrivée globales du journey
+        dep_raw = j.get("departure_date_time", "")   # "20260725T083000"
+        arr_raw = j.get("arrival_date_time", "")
+
+        def parse_dt(s):
+            try:
+                return datetime.strptime(s, "%Y%m%dT%H%M%S")
+            except Exception:
+                return None
+
+        dep_dt = parse_dt(dep_raw)
+        arr_dt = parse_dt(arr_raw)
+        if not dep_dt or not arr_dt:
+            continue
+
+        duration_min = int(j.get("duration", 0)) // 60
+        nb_transfers = int(j.get("nb_transfers", 0))
+
+        results.append({
+            "dep": dep_dt.strftime("%H:%M"),
+            "arr": arr_dt.strftime("%H:%M"),
+            "duration_min": duration_min,
+            "nb_transfers": nb_transfers,
+            "train_number": train_number,
+            "train_name": train_name,
+            "dep_dt": dep_dt,
+            "arr_dt": arr_dt,
+        })
+
+    # Trie : directs d'abord, puis par heure de départ
+    results.sort(key=lambda x: (x["nb_transfers"], x["dep_dt"]))
+    return results
 
 
 # ─────────────────────────────────────────────
@@ -344,7 +479,7 @@ def fmt_date(date_str: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# CALENDRIER — rendu via iframe (ptet zoomer sur le calendrier pour focus le we)
+# CALENDRIER
 # ─────────────────────────────────────────────
 def render_calendrier(membres: list):
     import streamlit.components.v1 as components
@@ -382,7 +517,6 @@ def render_calendrier(membres: list):
                 classes += " today"
 
             dots_html = ""
-            noms_html = ""
             if trajets:
                 dots_html = '<div class="cal-dots">'
                 for t in trajets:
@@ -390,10 +524,8 @@ def render_calendrier(membres: list):
                     prenom_safe = t["prenom"].replace('"', '')
                     dots_html += f'<span class="dot {dot_cls}" title="{prenom_safe}"></span>'
                 dots_html += "</div>"
-                prenoms = " ".join(t["prenom"][:4] for t in trajets[:3])
-                noms_html = f'<div class="cal-noms">{prenoms}</div>'
 
-            grid_html += f'<div class="{classes}"><div class="cal-day-num">{day_num}</div>{dots_html}{noms_html}</div>'
+            grid_html += f'<div class="{classes}"><div class="cal-day-num">{day_num}</div>{dots_html}</div>'
 
     full_html = f"""<!DOCTYPE html>
 <html>
@@ -404,33 +536,9 @@ def render_calendrier(membres: list):
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ font-family: 'DM Sans', sans-serif; background: white; padding: 20px; border-radius: 16px; }}
   h2 {{ font-family: 'Playfair Display', serif; font-size: 20px; color: #0f172a; margin-bottom: 16px; }}
-  .cal-grid {{
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    text-align: center;
-  }}
-  .cal-dow {{
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: uppercase;
-    padding: 4px 0;
-    letter-spacing: 0.05em;
-  }}
-  .cal-day {{
-    font-size: 12px;
-    padding: 5px 2px;
-    border-radius: 8px;
-    min-height: 52px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding-top: 5px;
-    background: #f8fafc;
-  }}
+  .cal-grid {{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }}
+  .cal-dow {{ font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; padding: 4px 0; letter-spacing: 0.05em; }}
+  .cal-day {{ font-size: 12px; padding: 5px 2px; border-radius: 8px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; background: #f8fafc; }}
   .cal-day.empty {{ background: transparent; }}
   .cal-day.weekend-bg {{ background: #eff6ff; }}
   .cal-day.today {{ outline: 2px solid #0ea5e9; }}
@@ -440,17 +548,10 @@ def render_calendrier(membres: list):
   .dot {{ width: 7px; height: 7px; border-radius: 50%; display: inline-block; }}
   .dot-aller  {{ background: #0ea5e9; }}
   .dot-retour {{ background: #8b5cf6; }}
-  .cal-noms {{ font-size: 9px; color: #64748b; margin-top: 2px; line-height: 1.2; }}
-  .legend {{
-    display: flex; gap: 16px; margin-top: 14px;
-    font-size: 12px; color: #475569; align-items: center; flex-wrap: wrap;
-  }}
+  .legend {{ display: flex; gap: 16px; margin-top: 14px; font-size: 12px; color: #475569; align-items: center; flex-wrap: wrap; }}
   .legend span {{ display: flex; align-items: center; gap: 5px; }}
   .ldot {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }}
-  .weekend-badge {{
-    background: #eff6ff; padding: 2px 10px; border-radius: 20px;
-    font-size: 11px; color: #0284c7; font-weight: 700;
-  }}
+  .weekend-badge {{ background: #eff6ff; padding: 2px 10px; border-radius: 20px; font-size: 11px; color: #0284c7; font-weight: 700; }}
 </style>
 </head>
 <body>
@@ -464,16 +565,33 @@ def render_calendrier(membres: list):
 </body>
 </html>"""
 
-    components.html(full_html, height=380, scrolling=False)
+    components.html(full_html, height=360, scrolling=False)
 
 
 # ─────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────
-if "my_ids" not in st.session_state:
-    st.session_state.my_ids = []
-if "show_form" not in st.session_state:
-    st.session_state.show_form = False
+defaults = {
+    "my_ids":            [],
+    "show_form":         False,
+    # champs du formulaire (pour pré-remplissage)
+    "form_prenom":       "",
+    "form_ville":        "",
+    "form_date":         DATE_DEFAULT,
+    "form_h_dep":        None,
+    "form_h_arr":        None,
+    "form_train":        "",
+    "form_direction":    "Aller — vers Nice",
+    # recherche SNCF
+    "search_done":       False,
+    "search_results":    [],
+    "search_query_ville": "",
+    "search_query_date": DATE_DEFAULT,
+    "selected_train_idx": None,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 
 # ─────────────────────────────────────────────
@@ -514,7 +632,7 @@ if allers:
 
 
 # ─────────────────────────────────────────────
-# TABS : Dashboard / Calendrier
+# TABS
 # ─────────────────────────────────────────────
 tab_dashboard, tab_calendrier = st.tabs(["🚄 Trajets", "📅 Calendrier"])
 
@@ -524,73 +642,232 @@ tab_dashboard, tab_calendrier = st.tabs(["🚄 Trajets", "📅 Calendrier"])
 # ══════════════════════════════════════════════
 with tab_dashboard:
 
+    # ── Helpers de pré-remplissage ──
+    def prefill_from_train(idx: int):
+        """Pré-remplit les champs du formulaire depuis un résultat de recherche."""
+        results = st.session_state.search_results
+        if idx < 0 or idx >= len(results):
+            return
+        t = results[idx]
+        st.session_state.form_h_dep   = t["dep_dt"].time()
+        st.session_state.form_h_arr   = t["arr_dt"].time()
+        st.session_state.form_train   = t["train_number"]
+        st.session_state.selected_train_idx = idx
+
+    def reset_search():
+        st.session_state.search_done        = False
+        st.session_state.search_results     = []
+        st.session_state.selected_train_idx = None
+        st.session_state.form_h_dep         = None
+        st.session_state.form_h_arr         = None
+        st.session_state.form_train         = ""
+
     # ── Formulaire ──
     def render_formulaire():
+        # Direction
+        direction_idx = 0 if st.session_state.form_direction == "Aller — vers Nice" else 1
         direction = st.radio(
             "Type de trajet",
             ["Aller — vers Nice", "Retour — depuis Nice"],
-            horizontal=True
+            index=direction_idx,
+            horizontal=True,
+            key="radio_direction",
         )
+        st.session_state.form_direction = direction
         is_retour = direction.startswith("Retour")
 
-        prenom = st.text_input("Prénom *", placeholder="ex. Sophie")
+        # Prénom
+        prenom = st.text_input("Prénom *", value=st.session_state.form_prenom,
+                               placeholder="ex. Sophie", key="input_prenom")
+        st.session_state.form_prenom = prenom
 
-        if is_retour:
-            ville_label = "Destination *"
-            date_label  = "Date de départ depuis Nice *"
-            dep_label   = "Heure de départ de Nice *"
-            arr_label   = "Heure d'arrivée *"
-        else:
-            ville_label = "Ville de départ *"
-            date_label  = "Date d'arrivée à Nice *"
-            dep_label   = "Heure de départ *"
-            arr_label   = "Heure d'arrivée à Nice *"
+        # Labels selon direction
+        ville_label = "Destination *"        if is_retour else "Ville de départ *"
+        date_label  = "Date de départ de Nice *" if is_retour else "Date d'arrivée à Nice *"
+        dep_label   = "Heure de départ de Nice *" if is_retour else "Heure de départ *"
+        arr_label   = "Heure d'arrivée *"
+        ville_ph    = "ex. Paris Gare de Lyon"
 
-        ville = st.text_input(ville_label, placeholder="ex. Paris Gare de Lyon")
+        ville = st.text_input(ville_label, value=st.session_state.form_ville,
+                              placeholder=ville_ph, key="input_ville")
+        if ville != st.session_state.form_ville:
+            reset_search()
+        st.session_state.form_ville = ville
+
         d_sel = st.date_input(
             date_label,
-            value=DATE_DEFAULT,
+            value=st.session_state.form_date,
             min_value=date(2026, 7, 1),
             max_value=date(2026, 8, 31),
+            key="input_date",
         )
+        if d_sel != st.session_state.form_date:
+            reset_search()
+        st.session_state.form_date = d_sel
 
+        # ── BOUTON RECHERCHE SNCF ──
+        st.markdown("")  # espacement
+        col_search, col_reset = st.columns([3, 1])
+        with col_search:
+            do_search = st.button(
+                "🔍 Rechercher les trains SNCF",
+                use_container_width=True,
+                disabled=not ville.strip(),
+                key="btn_search",
+            )
+        with col_reset:
+            if st.session_state.search_done:
+                if st.button("✕ Effacer", use_container_width=True, key="btn_clear_search"):
+                    reset_search()
+                    st.rerun()
+
+        if do_search and ville.strip():
+            with st.spinner("Recherche en cours…"):
+                # 1. Résoudre la gare de départ/destination
+                stop_id = search_stop_area(ville.strip())
+                if not stop_id:
+                    st.session_state.search_done = True
+                    st.session_state.search_results = []
+                    st.session_state.search_query_ville = ville.strip()
+                    st.session_state.search_query_date = d_sel
+                else:
+                    from_id = stop_id       if not is_retour else NICE_STOP_ID
+                    to_id   = NICE_STOP_ID  if not is_retour else stop_id
+                    dt_str  = d_sel.strftime("%Y%m%dT050000")  # à partir de 5h
+                    trains  = search_trains(from_id, to_id, dt_str)
+                    st.session_state.search_done = True
+                    st.session_state.search_results = trains
+                    st.session_state.search_query_ville = ville.strip()
+                    st.session_state.search_query_date = d_sel
+            st.rerun()
+
+        # ── Affichage des résultats ──
+        if st.session_state.search_done:
+            results = st.session_state.search_results
+            if not results:
+                st.markdown(f"""
+                <div class="search-error">
+                    😕 Aucun train trouvé pour <strong>{st.session_state.search_query_ville}</strong>
+                    le {st.session_state.search_query_date.strftime("%-d %B %Y")}.
+                    Vérifie le nom de la gare ou remplis les horaires manuellement ci-dessous.
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                n = len(results)
+                date_fmt = st.session_state.search_query_date.strftime("%-d %B")
+                st.markdown(f"""
+                <div class="search-info">
+                    🚄 {n} train{"s" if n > 1 else ""} trouvé{"s" if n > 1 else ""}
+                    depuis <strong>{st.session_state.search_query_ville}</strong>
+                    le {date_fmt} — clique pour pré-remplir
+                </div>
+                """, unsafe_allow_html=True)
+
+                for i, t in enumerate(results):
+                    is_selected = st.session_state.selected_train_idx == i
+                    card_cls = "train-result selected" if is_selected else "train-result"
+                    tag_direct = (
+                        '<span class="train-direct">Direct</span>'
+                        if t["nb_transfers"] == 0
+                        else f'<span class="train-correspondance">{t["nb_transfers"]} correspondance{"s" if t["nb_transfers"] > 1 else ""}</span>'
+                    )
+                    h = t["duration_min"] // 60
+                    mn = t["duration_min"] % 60
+                    duree_str = f"{h}h{mn:02d}" if h else f"{mn}min"
+                    num_str = f'<span class="train-num">{t["train_number"]}</span>' if t["train_number"] else ""
+                    type_str = f'<span class="train-type">{t["train_name"]}</span>' if t["train_name"] else ""
+
+                    st.markdown(f"""
+                    <div class="{card_cls}">
+                        <div class="train-result-top">
+                            {num_str}{type_str}{tag_direct}
+                        </div>
+                        <div style="display:flex; align-items:baseline; gap:10px; margin-top:4px;">
+                            <span class="train-horaires">{t['dep']} → {t['arr']}</span>
+                            <span class="train-duree">({duree_str})</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    btn_label = "✓ Sélectionné" if is_selected else "Choisir ce train"
+                    if st.button(btn_label, key=f"pick_{i}", use_container_width=True,
+                                 type="primary" if not is_selected else "secondary"):
+                        prefill_from_train(i)
+                        st.rerun()
+
+        # ── Séparateur ──
+        if st.session_state.selected_train_idx is not None:
+            t = st.session_state.search_results[st.session_state.selected_train_idx]
+            st.markdown(f"""
+            <div class="prefill-banner">
+                ✅ Train <strong>{t['train_number']}</strong> sélectionné —
+                {t['dep']} → {t['arr']} · horaires pré-remplis ci-dessous
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="color:#94a3b8; font-size:12px; margin: 8px 0 4px 0; font-family: 'DM Mono', monospace; text-transform:uppercase; letter-spacing:0.08em;">
+                ou remplis manuellement
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Heures (pré-remplies ou manuelles) ──
         col1, col2 = st.columns(2)
         with col1:
-            h_dep = st.time_input(dep_label, value=None)
+            h_dep_val = st.session_state.form_h_dep
+            h_dep = st.time_input(dep_label, value=h_dep_val, key="input_h_dep")
+            st.session_state.form_h_dep = h_dep
         with col2:
-            h_arr = st.time_input(arr_label, value=None)
+            h_arr_val = st.session_state.form_h_arr
+            h_arr = st.time_input(arr_label, value=h_arr_val, key="input_h_arr")
+            st.session_state.form_h_arr = h_arr
 
-        train = st.text_input("Numéro de train (optionnel)", placeholder="ex. TGV 6173")
+        train = st.text_input(
+            "Numéro de train (optionnel)",
+            value=st.session_state.form_train,
+            placeholder="ex. TGV 6173",
+            key="input_train",
+        )
+        st.session_state.form_train = train
 
+        # ── Boutons Enregistrer / Annuler ──
+        st.markdown("")
         col_save, col_cancel = st.columns([2, 1])
         with col_save:
-            if st.button("Enregistrer", use_container_width=True, type="primary"):
+            if st.button("Enregistrer", use_container_width=True, type="primary", key="btn_save"):
                 if not prenom or not ville or not d_sel or not h_dep or not h_arr:
                     st.error("Remplis tous les champs obligatoires.")
                 else:
                     data = {
-                        "prenom": prenom.strip(),
-                        "ville_depart": ville.strip(),
-                        "date_arrivee": d_sel.strftime("%Y-%m-%d"),
-                        "heure_depart": h_dep.strftime("%H:%M"),
+                        "prenom":        prenom.strip(),
+                        "ville_depart":  ville.strip(),
+                        "date_arrivee":  d_sel.strftime("%Y-%m-%d"),
+                        "heure_depart":  h_dep.strftime("%H:%M"),
                         "heure_arrivee": h_arr.strftime("%H:%M"),
-                        "numero_train": train.strip() or None,
-                        "statut": "pas_parti",
-                        "direction": "retour" if is_retour else "aller",
+                        "numero_train":  train.strip() or None,
+                        "statut":        "pas_parti",
+                        "direction":     "retour" if is_retour else "aller",
                     }
                     result = add_membre(data)
                     if result:
                         st.session_state.my_ids.append(result["id"])
-                        st.session_state.show_form = False
+                        # Reset complet
+                        st.session_state.show_form  = False
+                        st.session_state.form_prenom = ""
+                        st.session_state.form_ville  = ""
+                        st.session_state.form_date   = DATE_DEFAULT
+                        reset_search()
                         st.success(f"Trajet de {prenom} enregistré !")
                         st.rerun()
                     else:
                         st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
         with col_cancel:
-            if st.button("Annuler", use_container_width=True):
+            if st.button("Annuler", use_container_width=True, key="btn_cancel"):
                 st.session_state.show_form = False
+                reset_search()
                 st.rerun()
 
+    # ── Toggle formulaire ──
     if not st.session_state.show_form:
         st.button("＋ Ajouter un trajet", use_container_width=True, type="primary",
                   on_click=lambda: st.session_state.update(show_form=True))
@@ -683,7 +960,6 @@ with tab_calendrier:
     render_calendrier(membres)
 
     if membres:
-        # Liste des trajets par date sous le calendrier
         by_date_sorted = {}
         for m in membres:
             d = m.get("date_arrivee", "")
@@ -697,16 +973,17 @@ with tab_calendrier:
                 label = d_str
             st.markdown(f'<div class="section-title">{label}</div>', unsafe_allow_html=True)
             for m in by_date_sorted[d_str]:
-                direction = m.get("direction", "aller")
+                direction  = m.get("direction", "aller")
                 trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
-                dir_tag = "RETOUR" if direction == "retour" else "ALLER"
-                icon = "🎉" if compute_statut(m) == "arrive" else ("🚄" if compute_statut(m) == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+                dir_tag    = "RETOUR" if direction == "retour" else "ALLER"
+                statut     = compute_statut(m)
+                icon       = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
                 st.markdown(f"""
-                <div class="membre-card {get_card_class(compute_statut(m), direction)}">
+                <div class="membre-card {get_card_class(statut, direction)}">
                     <div class="membre-top">
                         <span style="font-size:18px">{icon}</span>
                         <span class="membre-nom">{m['prenom']}</span>
-                        <span class="badge {get_badge_class(compute_statut(m), direction)}">{get_badge_label(compute_statut(m), direction)}</span>
+                        <span class="badge {get_badge_class(statut, direction)}">{get_badge_label(statut, direction)}</span>
                         <span class="direction-tag">{dir_tag}</span>
                     </div>
                     <div class="membre-trajet">{trajet_str}</div>
