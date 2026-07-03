@@ -215,6 +215,17 @@ p, div, span, [data-testid="stWidgetLabel"] {
     color: #334155;
 }
 
+.mode-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
 .membre-trajet  { font-size: 13px; color: #475569; margin-top: 3px; font-weight: 500; }
 .membre-horaires { font-family: 'DM Mono', monospace; font-size: 12px; color: #64748b; margin-top: 2px; }
 
@@ -524,7 +535,7 @@ def compute_statut(membre: dict) -> str:
 
         dt_arr = datetime.combine(date_arr, h_arr)
 
-        # ── FIX train de nuit : si h_dep > h_arr, le départ était la veille ──
+        # ── FIX trajet de nuit : si h_dep > h_arr, le départ était la veille ──
         date_dep = date_arr - timedelta(days=1) if h_dep > h_arr else date_arr
         dt_dep   = datetime.combine(date_dep, h_dep)
 
@@ -552,6 +563,12 @@ def get_card_class(statut: str, direction: str) -> str:
     if direction == "retour" and statut in ("pas_parti", "en_route"):
         return "retour"
     return statut
+
+def get_mode_icon(mode: str) -> str:
+    return "⛴️" if mode == "bateau" else "🚄"
+
+def get_mode_label(mode: str) -> str:
+    return "BATEAU" if mode == "bateau" else "TRAIN"
 
 def format_countdown(membre: dict) -> str:
     try:
@@ -685,6 +702,7 @@ defaults = {
     "form_h_arr":        None,
     "form_train":        "",
     "form_direction":    "Aller — vers Nice",
+    "form_mode":         "Train",
     "search_done":       False,
     "search_results":    [],
     "search_query_ville": "",
@@ -764,6 +782,21 @@ with tab_dashboard:
         st.session_state.form_train         = ""
 
     def render_formulaire():
+        # ── Mode de transport : train (avec recherche SNCF) ou bateau (saisie manuelle) ──
+        mode_idx = 0 if st.session_state.form_mode == "Train" else 1
+        mode_choice = st.radio(
+            "Mode de transport",
+            ["🚄 Train", "⛴️ Bateau"],
+            index=mode_idx,
+            horizontal=True,
+            key="radio_mode",
+        )
+        new_mode = "Train" if "Train" in mode_choice else "Bateau"
+        if new_mode != st.session_state.form_mode:
+            reset_search()
+        st.session_state.form_mode = new_mode
+        is_bateau = new_mode == "Bateau"
+
         direction_idx = 0 if st.session_state.form_direction == "Aller — vers Nice" else 1
         direction = st.radio(
             "Type de trajet",
@@ -779,33 +812,50 @@ with tab_dashboard:
                                placeholder="ex. Sophie", key="input_prenom")
         st.session_state.form_prenom = prenom
 
-        ville_label = "Destination *"             if is_retour else "Gare de départ *"
+        if is_bateau:
+            ville_label = "Port / destination *" if is_retour else "Port de départ *"
+        else:
+            ville_label = "Destination *"          if is_retour else "Gare de départ *"
         date_label  = "Date d'arrivée à destination *"
         dep_label   = "Heure de départ de Nice *" if is_retour else "Heure de départ *"
         arr_label   = "Heure d'arrivée *"
 
-        st.markdown(f'''<label style="font-size:14px;font-weight:600;color:#1e293b">{ville_label}</label>''',
-                    unsafe_allow_html=True)
-        selected_gare = st_searchbox(
-            autocomplete_gare,
-            key="searchbox_gare",
-            placeholder="ex. Paris Gare de Lyon...",
-            label=None,
-            default=st.session_state.get("form_gare_tuple"),
-            default_use_searchterm=True,
-            edit_after_submit="option",
-        )
-
-        if isinstance(selected_gare, str) and selected_gare.strip():
-            gare_label   = selected_gare
-            gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
+        if is_bateau:
+            # ── Bateau : pas d'autocomplete SNCF, saisie libre du port ──
+            gare_label = st.text_input(
+                ville_label,
+                value=st.session_state.form_ville,
+                placeholder="ex. Bastia, Calvi, Île-Rousse...",
+                key="input_ville_bateau",
+            )
+            gare_stop_id = None
+            if gare_label != st.session_state.form_ville:
+                reset_search()
+            st.session_state.form_ville = gare_label
+            st.session_state.form_gare_stop_id = None
         else:
-            gare_label, gare_stop_id = "", None
+            st.markdown(f'''<label style="font-size:14px;font-weight:600;color:#1e293b">{ville_label}</label>''',
+                        unsafe_allow_html=True)
+            selected_gare = st_searchbox(
+                autocomplete_gare,
+                key="searchbox_gare",
+                placeholder="ex. Paris Gare de Lyon...",
+                label=None,
+                default=st.session_state.get("form_gare_tuple"),
+                default_use_searchterm=True,
+                edit_after_submit="option",
+            )
 
-        if gare_label != st.session_state.form_ville:
-            reset_search()
-        st.session_state.form_ville = gare_label
-        st.session_state.form_gare_stop_id = gare_stop_id
+            if isinstance(selected_gare, str) and selected_gare.strip():
+                gare_label   = selected_gare
+                gare_stop_id = st.session_state.get("_gare_id_map", {}).get(selected_gare)
+            else:
+                gare_label, gare_stop_id = "", None
+
+            if gare_label != st.session_state.form_ville:
+                reset_search()
+            st.session_state.form_ville = gare_label
+            st.session_state.form_gare_stop_id = gare_stop_id
 
         d_sel = st.date_input(
             date_label,
@@ -818,140 +868,149 @@ with tab_dashboard:
             reset_search()
         st.session_state.form_date = d_sel
 
-        # ── Info contextuelle train de nuit ──
+        # ── Info contextuelle trajet de nuit ──
         st.markdown("""
         <div style="font-size:12px; color:#64748b; margin: 2px 0 8px 0; font-style:italic;">
-            🌙 Train de nuit ? Indique la date d'<strong>arrivée</strong> — les horaires de départ la veille seront gérés automatiquement.
+            🌙 Trajet de nuit ? Indique la date d'<strong>arrivée</strong> — les horaires de départ la veille seront gérés automatiquement.
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("")
-        col_search, col_reset = st.columns([3, 1])
-        with col_search:
-            do_search = st.button(
-                "🔍 Rechercher les trains SNCF",
-                use_container_width=True,
-                disabled=not gare_label.strip(),
-                key="btn_search",
-            )
-        with col_reset:
-            if st.session_state.search_done:
-                if st.button("✕ Effacer", use_container_width=True, key="btn_clear_search"):
-                    reset_search()
-                    st.rerun()
+        if not is_bateau:
+            # ── Recherche SNCF, uniquement en mode train ──
+            st.markdown("")
+            col_search, col_reset = st.columns([3, 1])
+            with col_search:
+                do_search = st.button(
+                    "🔍 Rechercher les trains SNCF",
+                    use_container_width=True,
+                    disabled=not gare_label.strip(),
+                    key="btn_search",
+                )
+            with col_reset:
+                if st.session_state.search_done:
+                    if st.button("✕ Effacer", use_container_width=True, key="btn_clear_search"):
+                        reset_search()
+                        st.rerun()
 
-            if st.button("Vider le cache API"):
-                autocomplete_gare.clear()
-                search_trains.clear()
-                st.success("Cache vidé")
+                if st.button("Vider le cache API"):
+                    autocomplete_gare.clear()
+                    search_trains.clear()
+                    st.success("Cache vidé")
 
-        if do_search and gare_label.strip():
-            with st.spinner("Recherche des trains…"):
-                stop_id = gare_stop_id
-                if not stop_id:
-                    autocomplete_gare(gare_label.strip())
-                    stop_id = st.session_state.get("_gare_id_map", {}).get(gare_label.strip())
+            if do_search and gare_label.strip():
+                with st.spinner("Recherche des trains…"):
+                    stop_id = gare_stop_id
+                    if not stop_id:
+                        autocomplete_gare(gare_label.strip())
+                        stop_id = st.session_state.get("_gare_id_map", {}).get(gare_label.strip())
 
-                if not stop_id:
-                    st.session_state.search_done = True
-                    st.session_state.search_results = []
-                    st.session_state.search_query_ville = gare_label.strip()
-                    st.session_state.search_query_date = d_sel
-                else:
-                    from_id = stop_id      if not is_retour else NICE_STOP_ID
-                    to_id   = NICE_STOP_ID if not is_retour else stop_id
-
-                    # ── FIX train de nuit : on démarre la recherche la veille à 18h00
-                    #    pour capturer les trains de nuit qui partent le soir précédent.
-                    search_date = d_sel - timedelta(days=1)
-                    dt_str = search_date.strftime("%Y%m%dT180000")
-
-                    trains  = search_trains(from_id, to_id, dt_str)
-                    st.session_state.search_done = True
-                    st.session_state.search_results = trains
-                    st.session_state.search_query_ville = gare_label.strip()
-                    st.session_state.search_query_date = d_sel
-            st.rerun()
-
-        if st.session_state.search_done:
-            results = st.session_state.search_results
-            if not results:
-                stop_used = st.session_state.get("form_gare_stop_id", "inconnu")
-                st.markdown(f"""
-                <div class="search-error">
-                    😕 Aucun train trouvé pour <strong>{st.session_state.search_query_ville}</strong>
-                    le {st.session_state.search_query_date.strftime("%-d %B %Y")}.<br>
-                    <span style="font-size:11px;opacity:0.7">stop_id utilisé : {stop_used}</span><br>
-                    Vérifie le nom de la gare ou remplis les horaires manuellement ci-dessous.
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                n = len(results)
-                date_fmt = st.session_state.search_query_date.strftime("%-d %B")
-                nb_nuit = sum(1 for t in results if t.get("is_night_train"))
-                nuit_info = f" dont {nb_nuit} train{'s' if nb_nuit > 1 else ''} de nuit 🌙" if nb_nuit else ""
-                st.markdown(f"""
-                <div class="search-info">
-                    🚄 {n} train{"s" if n > 1 else ""} trouvé{"s" if n > 1 else ""}
-                    depuis <strong>{st.session_state.search_query_ville}</strong>
-                    le {date_fmt}{nuit_info} — clique pour pré-remplir
-                </div>
-                """, unsafe_allow_html=True)
-
-                for i, t in enumerate(results):
-                    is_selected = st.session_state.selected_train_idx == i
-                    card_cls = "train-result selected" if is_selected else "train-result"
-                    tag_direct = (
-                        '<span class="train-direct">Direct</span>'
-                        if t["nb_transfers"] == 0
-                        else f'<span class="train-correspondance">{t["nb_transfers"]} correspondance{"s" if t["nb_transfers"] > 1 else ""}</span>'
-                    )
-                    # Badge train de nuit
-                    tag_nuit = '<span class="train-nuit">🌙 Nuit</span>' if t.get("is_night_train") else ""
-
-                    h = t["duration_min"] // 60
-                    mn = t["duration_min"] % 60
-                    duree_str = f"{h}h{mn:02d}" if h else f"{mn}min"
-                    num_str = f'<span class="train-num">{t["train_number"]}</span>' if t["train_number"] else ""
-                    type_str = f'<span class="train-type">{t["train_name"]}</span>' if t["train_name"] else ""
-
-                    # Affiche les dates si train de nuit (départ ≠ arrivée)
-                    if t.get("is_night_train"):
-                        horaires_str = f'{t["dep_date"]} {t["dep"]} → {t["arr_date"]} {t["arr"]}'
+                    if not stop_id:
+                        st.session_state.search_done = True
+                        st.session_state.search_results = []
+                        st.session_state.search_query_ville = gare_label.strip()
+                        st.session_state.search_query_date = d_sel
                     else:
-                        horaires_str = f'{t["dep"]} → {t["arr"]}'
+                        from_id = stop_id      if not is_retour else NICE_STOP_ID
+                        to_id   = NICE_STOP_ID if not is_retour else stop_id
 
+                        # ── FIX train de nuit : on démarre la recherche la veille à 18h00
+                        #    pour capturer les trains de nuit qui partent le soir précédent.
+                        search_date = d_sel - timedelta(days=1)
+                        dt_str = search_date.strftime("%Y%m%dT180000")
+
+                        trains  = search_trains(from_id, to_id, dt_str)
+                        st.session_state.search_done = True
+                        st.session_state.search_results = trains
+                        st.session_state.search_query_ville = gare_label.strip()
+                        st.session_state.search_query_date = d_sel
+                st.rerun()
+
+            if st.session_state.search_done:
+                results = st.session_state.search_results
+                if not results:
+                    stop_used = st.session_state.get("form_gare_stop_id", "inconnu")
                     st.markdown(f"""
-                    <div class="{card_cls}">
-                        <div class="train-result-top">
-                            {num_str}{type_str}{tag_direct}{tag_nuit}
-                        </div>
-                        <div style="display:flex; align-items:baseline; gap:10px; margin-top:4px;">
-                            <span class="train-horaires">{horaires_str}</span>
-                            <span class="train-duree">({duree_str})</span>
-                        </div>
+                    <div class="search-error">
+                        😕 Aucun train trouvé pour <strong>{st.session_state.search_query_ville}</strong>
+                        le {st.session_state.search_query_date.strftime("%-d %B %Y")}.<br>
+                        <span style="font-size:11px;opacity:0.7">stop_id utilisé : {stop_used}</span><br>
+                        Vérifie le nom de la gare ou remplis les horaires manuellement ci-dessous.
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    n = len(results)
+                    date_fmt = st.session_state.search_query_date.strftime("%-d %B")
+                    nb_nuit = sum(1 for t in results if t.get("is_night_train"))
+                    nuit_info = f" dont {nb_nuit} train{'s' if nb_nuit > 1 else ''} de nuit 🌙" if nb_nuit else ""
+                    st.markdown(f"""
+                    <div class="search-info">
+                        🚄 {n} train{"s" if n > 1 else ""} trouvé{"s" if n > 1 else ""}
+                        depuis <strong>{st.session_state.search_query_ville}</strong>
+                        le {date_fmt}{nuit_info} — clique pour pré-remplir
                     </div>
                     """, unsafe_allow_html=True)
 
-                    btn_label = "✓ Sélectionné" if is_selected else "Choisir ce train"
-                    if st.button(btn_label, key=f"pick_{i}", use_container_width=True,
-                                 type="primary" if not is_selected else "secondary"):
-                        prefill_from_train(i)
-                        st.rerun()
+                    for i, t in enumerate(results):
+                        is_selected = st.session_state.selected_train_idx == i
+                        card_cls = "train-result selected" if is_selected else "train-result"
+                        tag_direct = (
+                            '<span class="train-direct">Direct</span>'
+                            if t["nb_transfers"] == 0
+                            else f'<span class="train-correspondance">{t["nb_transfers"]} correspondance{"s" if t["nb_transfers"] > 1 else ""}</span>'
+                        )
+                        # Badge train de nuit
+                        tag_nuit = '<span class="train-nuit">🌙 Nuit</span>' if t.get("is_night_train") else ""
 
-        if st.session_state.selected_train_idx is not None:
-            t = st.session_state.search_results[st.session_state.selected_train_idx]
-            nuit_mention = " · 🌙 Train de nuit" if t.get("is_night_train") else ""
-            st.markdown(f"""
-            <div class="prefill-banner">
-                ✅ Train <strong>{t['train_number']}</strong> sélectionné —
-                {t['dep']} → {t['arr']} · horaires pré-remplis ci-dessous{nuit_mention}
-            </div>
-            """, unsafe_allow_html=True)
+                        h = t["duration_min"] // 60
+                        mn = t["duration_min"] % 60
+                        duree_str = f"{h}h{mn:02d}" if h else f"{mn}min"
+                        num_str = f'<span class="train-num">{t["train_number"]}</span>' if t["train_number"] else ""
+                        type_str = f'<span class="train-type">{t["train_name"]}</span>' if t["train_name"] else ""
+
+                        # Affiche les dates si train de nuit (départ ≠ arrivée)
+                        if t.get("is_night_train"):
+                            horaires_str = f'{t["dep_date"]} {t["dep"]} → {t["arr_date"]} {t["arr"]}'
+                        else:
+                            horaires_str = f'{t["dep"]} → {t["arr"]}'
+
+                        st.markdown(f"""
+                        <div class="{card_cls}">
+                            <div class="train-result-top">
+                                {num_str}{type_str}{tag_direct}{tag_nuit}
+                            </div>
+                            <div style="display:flex; align-items:baseline; gap:10px; margin-top:4px;">
+                                <span class="train-horaires">{horaires_str}</span>
+                                <span class="train-duree">({duree_str})</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        btn_label = "✓ Sélectionné" if is_selected else "Choisir ce train"
+                        if st.button(btn_label, key=f"pick_{i}", use_container_width=True,
+                                     type="primary" if not is_selected else "secondary"):
+                            prefill_from_train(i)
+                            st.rerun()
+
+            if st.session_state.selected_train_idx is not None:
+                t = st.session_state.search_results[st.session_state.selected_train_idx]
+                nuit_mention = " · 🌙 Train de nuit" if t.get("is_night_train") else ""
+                st.markdown(f"""
+                <div class="prefill-banner">
+                    ✅ Train <strong>{t['train_number']}</strong> sélectionné —
+                    {t['dep']} → {t['arr']} · horaires pré-remplis ci-dessous{nuit_mention}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="color:#94a3b8; font-size:12px; margin: 8px 0 4px 0; font-family: 'DM Mono', monospace; text-transform:uppercase; letter-spacing:0.08em;">
+                    ou remplis manuellement
+                </div>
+                """, unsafe_allow_html=True)
         else:
+            # ── Bateau : toujours en saisie manuelle, pas de recherche ──
             st.markdown("""
             <div style="color:#94a3b8; font-size:12px; margin: 8px 0 4px 0; font-family: 'DM Mono', monospace; text-transform:uppercase; letter-spacing:0.08em;">
-                ou remplis manuellement
+                renseigne les horaires de la traversée
             </div>
             """, unsafe_allow_html=True)
 
@@ -965,19 +1024,26 @@ with tab_dashboard:
             h_arr = st.time_input(arr_label, value=h_arr_val, key="input_h_arr")
             st.session_state.form_h_arr = h_arr
 
-        # ── Avertissement visuel si saisie manuelle détecte un train de nuit ──
+        # ── Avertissement visuel si saisie manuelle détecte un trajet de nuit ──
         if h_dep and h_arr and h_dep > h_arr:
             st.markdown("""
             <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px;
                         padding:8px 12px; font-size:12px; color:#3730a3; margin-top:4px;">
-                🌙 <strong>Train de nuit détecté</strong> — le départ sera considéré la veille de la date d'arrivée saisie.
+                🌙 <strong>Trajet de nuit détecté</strong> — le départ sera considéré la veille de la date d'arrivée saisie.
             </div>
             """, unsafe_allow_html=True)
 
+        if is_bateau:
+            detail_label       = "Compagnie / n° de traversée (optionnel)"
+            detail_placeholder = "ex. Corsica Linea, départ 21h"
+        else:
+            detail_label       = "n°voiture et n°place (optionnel)"
+            detail_placeholder = "ex. Voiture 3 Place 306"
+
         train = st.text_input(
-            "n°voiture et n°place (optionnel)",
+            detail_label,
             value=st.session_state.form_train,
-            placeholder="ex. Voiture 3 Place 306",
+            placeholder=detail_placeholder,
             key="input_train",
         )
         st.session_state.form_train = train
@@ -990,14 +1056,15 @@ with tab_dashboard:
                     st.error("Remplis tous les champs obligatoires.")
                 else:
                     data = {
-                        "prenom":        prenom.strip(),
-                        "ville_depart":  gare_label.strip(),
-                        "date_arrivee":  d_sel.strftime("%Y-%m-%d"),
-                        "heure_depart":  h_dep.strftime("%H:%M"),
-                        "heure_arrivee": h_arr.strftime("%H:%M"),
-                        "numero_train":  train.strip() or None,
-                        "statut":        "pas_parti",
-                        "direction":     "retour" if is_retour else "aller",
+                        "prenom":         prenom.strip(),
+                        "ville_depart":   gare_label.strip(),
+                        "date_arrivee":   d_sel.strftime("%Y-%m-%d"),
+                        "heure_depart":   h_dep.strftime("%H:%M"),
+                        "heure_arrivee":  h_arr.strftime("%H:%M"),
+                        "numero_train":   train.strip() or None,
+                        "statut":         "pas_parti",
+                        "direction":      "retour" if is_retour else "aller",
+                        "mode_transport": "bateau" if is_bateau else "train",
                     }
                     result = add_membre(data)
                     if result:
@@ -1006,11 +1073,12 @@ with tab_dashboard:
                         st.session_state.form_prenom = ""
                         st.session_state.form_ville  = ""
                         st.session_state.form_date   = DATE_DEFAULT
+                        st.session_state.form_mode   = "Train"
                         reset_search()
                         st.success(f"Trajet de {prenom} enregistré !")
                         st.rerun()
                     else:
-                        st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase.")
+                        st.error("Erreur lors de l'enregistrement. Vérifie les clés Supabase / la colonne mode_transport.")
         with col_cancel:
             if st.button("Annuler", use_container_width=True, key="btn_cancel"):
                 st.session_state.show_form = False
@@ -1045,16 +1113,18 @@ with tab_dashboard:
     def render_trajet(m: dict):
         statut    = compute_statut(m)
         direction = m.get("direction", "aller")
+        mode      = m.get("mode_transport", "train")
         card_cls  = get_card_class(statut, direction)
         badge_cls = get_badge_class(statut, direction)
         badge_lbl = get_badge_label(statut, direction)
         train_str = f" · {m['numero_train']}" if m.get("numero_train") else ""
         date_str  = fmt_date(m.get("date_arrivee", ""))
         dir_tag   = "RETOUR" if direction == "retour" else "ALLER"
-        icon      = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+        transport_icon = get_mode_icon(mode)
+        icon      = "🎉" if statut == "arrive" else (transport_icon if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
         trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
 
-        # ── Indicateur train de nuit en saisie manuelle ──
+        # ── Indicateur trajet de nuit en saisie manuelle ──
         try:
             h_dep_t = datetime.strptime(m["heure_depart"], "%H:%M").time()
             h_arr_t = datetime.strptime(m["heure_arrivee"], "%H:%M").time()
@@ -1069,9 +1139,10 @@ with tab_dashboard:
                 <span class="membre-nom">{m['prenom']}</span>
                 <span class="badge {badge_cls}">{badge_lbl}</span>
                 <span class="direction-tag">{dir_tag}</span>
+                <span class="mode-tag">{get_mode_label(mode)}</span>
             </div>
             <div class="membre-trajet">{trajet_str}</div>
-            <div class="membre-horaires">🚆 {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}{nuit_icon}</div>
+            <div class="membre-horaires">{transport_icon} {date_str} · {m['heure_depart']} → {m['heure_arrivee']}{train_str}{nuit_icon}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1129,10 +1200,12 @@ with tab_calendrier:
             st.markdown(f'<div class="section-title">{label}</div>', unsafe_allow_html=True)
             for m in by_date_sorted[d_str]:
                 direction  = m.get("direction", "aller")
+                mode       = m.get("mode_transport", "train")
                 trajet_str = f"Nice → {m['ville_depart']}" if direction == "retour" else f"{m['ville_depart']} → Nice"
                 dir_tag    = "RETOUR" if direction == "retour" else "ALLER"
                 statut     = compute_statut(m)
-                icon       = "🎉" if statut == "arrive" else ("🚄" if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
+                transport_icon = get_mode_icon(mode)
+                icon       = "🎉" if statut == "arrive" else (transport_icon if statut == "en_route" else ("🏠" if direction == "aller" else "🧳"))
                 try:
                     h_dep_t = datetime.strptime(m["heure_depart"], "%H:%M").time()
                     h_arr_t = datetime.strptime(m["heure_arrivee"], "%H:%M").time()
@@ -1146,9 +1219,10 @@ with tab_calendrier:
                         <span class="membre-nom">{m['prenom']}</span>
                         <span class="badge {get_badge_class(statut, direction)}">{get_badge_label(statut, direction)}</span>
                         <span class="direction-tag">{dir_tag}</span>
+                        <span class="mode-tag">{get_mode_label(mode)}</span>
                     </div>
                     <div class="membre-trajet">{trajet_str}</div>
-                    <div class="membre-horaires">🚆 {m['heure_depart']} → {m['heure_arrivee']}{' · ' + m['numero_train'] if m.get('numero_train') else ''}{nuit_icon}</div>
+                    <div class="membre-horaires">{transport_icon} {m['heure_depart']} → {m['heure_arrivee']}{' · ' + m['numero_train'] if m.get('numero_train') else ''}{nuit_icon}</div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
