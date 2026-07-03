@@ -2,7 +2,6 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, date, time as dtime, timedelta
 import time
-import calendar
 import requests
 from functools import lru_cache
 from streamlit_searchbox import st_searchbox
@@ -605,48 +604,83 @@ def fmt_date(date_str: str) -> str:
 def render_calendrier(membres: list):
     import streamlit.components.v1 as components
 
+    # ── Plage dynamique : min/max des dates présentes dans les données ──
+    dates_in_data = []
+    for m in membres:
+        d = m.get("date_arrivee")
+        if d:
+            try:
+                dates_in_data.append(datetime.strptime(d, "%Y-%m-%d").date())
+            except Exception:
+                pass
+
+    if dates_in_data:
+        min_date = min(dates_in_data)
+        max_date = max(dates_in_data)
+    else:
+        min_date = WEEKEND_START
+        max_date = WEEKEND_END
+
+    # ── Index par date ──
     by_date: dict = {}
     for m in membres:
         d = m.get("date_arrivee")
         if d:
             by_date.setdefault(d, []).append(m)
 
-    year, month = 2026, 7
-    today = date.today()
-    cal = calendar.monthcalendar(year, month)
-    jours_fr = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"]
-    weekend_days = {24, 25, 26, 27}
+    # ── Liste des jours à afficher ──
+    days = []
+    cur = min_date
+    while cur <= max_date:
+        days.append(cur)
+        cur += timedelta(days=1)
 
-    grid_html = ""
-    for dow in jours_fr:
-        grid_html += f'<div class="cal-dow">{dow}</div>'
+    today      = date.today()
+    JOURS_FR   = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    MOIS_FR    = ["jan", "fév", "mar", "avr", "mai", "jun", "juil", "aoû", "sep", "oct", "nov", "déc"]
 
-    for week in cal:
-        for day_num in week:
-            if day_num == 0:
-                grid_html += '<div class="cal-day empty"></div>'
-                continue
+    # ── Génération des colonnes ──
+    day_cards_html = ""
+    max_per_day    = max((len(v) for v in by_date.values()), default=0)
 
-            d_obj = date(year, month, day_num)
-            d_str = d_obj.strftime("%Y-%m-%d")
-            trajets = by_date.get(d_str, [])
+    for d_obj in days:
+        d_str   = d_obj.strftime("%Y-%m-%d")
+        trajets = by_date.get(d_str, [])
 
-            classes = "cal-day"
-            if day_num in weekend_days:
-                classes += " weekend-bg"
-            if d_obj == today:
-                classes += " today"
+        day_name  = JOURS_FR[d_obj.weekday()]
+        month_str = MOIS_FR[d_obj.month - 1]
 
-            dots_html = ""
-            if trajets:
-                dots_html = '<div class="cal-dots">'
-                for t in trajets:
-                    dot_cls = "dot-retour" if t.get("direction") == "retour" else "dot-aller"
-                    prenom_safe = t["prenom"].replace('"', '')
-                    dots_html += f'<span class="dot {dot_cls}" title="{prenom_safe}"></span>'
-                dots_html += "</div>"
+        extra = []
+        if WEEKEND_START <= d_obj <= WEEKEND_END:
+            extra.append("weekend-bg")
+        if d_obj == today:
+            extra.append("today")
+        card_cls = "day-card " + " ".join(extra)
 
-            grid_html += f'<div class="{classes}"><div class="cal-day-num">{day_num}</div>{dots_html}</div>'
+        chips_html = ""
+        for t in trajets:
+            direction  = t.get("direction", "aller")
+            mode       = t.get("mode_transport", "train")
+            chip_cls   = "chip-retour" if direction == "retour" else "chip-aller"
+            mode_icon  = "⛴️" if mode == "bateau" else "🚄"
+            arrow      = "←" if direction == "retour" else "→"
+            prenom     = t["prenom"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")[:13]
+            chips_html += f'<div class="person-chip {chip_cls}">{mode_icon} {prenom} <span class="arr">{arrow}</span></div>'
+
+        day_cards_html += f"""<div class="{card_cls}">
+  <div class="day-hdr">
+    <div class="dname">{day_name}</div>
+    <div class="dnum">{d_obj.day}</div>
+    <div class="dmonth">{month_str}</div>
+  </div>
+  <div class="day-people">{chips_html}</div>
+</div>"""
+
+    n_days = len(days)
+
+    # Hauteur dynamique selon le max de personnes par jour
+    chip_h = 30   # px par chip (font + padding + gap)
+    h = max(210, 95 + max_per_day * chip_h + 52 + 16)
 
     full_html = f"""<!DOCTYPE html>
 <html>
@@ -655,38 +689,110 @@ def render_calendrier(membres: list):
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=DM+Mono:wght@500&family=Playfair+Display:wght@700&display=swap');
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'DM Sans', sans-serif; background: white; padding: 20px; border-radius: 16px; }}
-  h2 {{ font-family: 'Playfair Display', serif; font-size: 20px; color: #0f172a; margin-bottom: 16px; }}
-  .cal-grid {{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }}
-  .cal-dow {{ font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; padding: 4px 0; letter-spacing: 0.05em; }}
-  .cal-day {{ font-size: 12px; padding: 5px 2px; border-radius: 8px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; background: #f8fafc; }}
-  .cal-day.empty {{ background: transparent; }}
-  .cal-day.weekend-bg {{ background: #eff6ff; }}
-  .cal-day.today {{ outline: 2px solid #0ea5e9; }}
-  .cal-day-num {{ font-weight: 700; color: #0f172a; font-size: 13px; }}
-  .cal-day.weekend-bg .cal-day-num {{ color: #0284c7; }}
-  .cal-dots {{ display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: 3px; }}
-  .dot {{ width: 7px; height: 7px; border-radius: 50%; display: inline-block; }}
-  .dot-aller  {{ background: #0ea5e9; }}
-  .dot-retour {{ background: #8b5cf6; }}
-  .legend {{ display: flex; gap: 16px; margin-top: 14px; font-size: 12px; color: #475569; align-items: center; flex-wrap: wrap; }}
+  body {{ font-family: 'DM Sans', sans-serif; background: transparent; padding: 4px 0 0 0; }}
+
+  .cal-strip {{
+    display: grid;
+    grid-template-columns: repeat({n_days}, 1fr);
+    gap: 6px;
+  }}
+
+  .day-card {{
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 10px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1.5px solid #e2e8f0;
+    min-width: 0;
+    overflow: hidden;
+  }}
+  .day-card.weekend-bg {{
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }}
+  .day-card.today {{
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 2px rgba(14,165,233,0.18);
+  }}
+
+  .day-hdr {{ text-align: center; margin-bottom: 8px; width: 100%; }}
+  .dname {{
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }}
+  .dnum {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.1;
+  }}
+  .day-card.weekend-bg .dnum {{ color: #0284c7; }}
+  .dmonth {{
+    font-size: 9px;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 1px;
+  }}
+
+  .day-people {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }}
+
+  .person-chip {{
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+    line-height: 1.35;
+  }}
+  .chip-aller  {{ background: #e0f2fe; color: #0369a1; }}
+  .chip-retour {{ background: #ede9fe; color: #5b21b6; }}
+  .arr {{ opacity: 0.6; font-size: 10px; }}
+
+  .legend {{
+    display: flex;
+    gap: 14px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #475569;
+    align-items: center;
+    flex-wrap: wrap;
+  }}
   .legend span {{ display: flex; align-items: center; gap: 5px; }}
-  .ldot {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }}
-  .weekend-badge {{ background: #eff6ff; padding: 2px 10px; border-radius: 20px; font-size: 11px; color: #0284c7; font-weight: 700; }}
+  .lchip {{ width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex-shrink: 0; }}
+  .wk-badge {{
+    background: #eff6ff; padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; color: #0284c7; font-weight: 700;
+  }}
 </style>
 </head>
 <body>
-  <h2>📅 Juillet 2026</h2>
-  <div class="cal-grid">{grid_html}</div>
+  <div class="cal-strip">{day_cards_html}</div>
   <div class="legend">
-    <span><span class="ldot" style="background:#0ea5e9"></span> Aller vers Nice</span>
-    <span><span class="ldot" style="background:#8b5cf6"></span> Retour</span>
-    <span class="weekend-badge">Weekend 24–27 juillet</span>
+    <span><span class="lchip" style="background:#e0f2fe;border:1px solid #bae6fd"></span> Arrivées à Nice</span>
+    <span><span class="lchip" style="background:#ede9fe;border:1px solid #c4b5fd"></span> Retours</span>
+    <span class="wk-badge">Weekend 24–27 juil</span>
   </div>
 </body>
 </html>"""
 
-    components.html(full_html, height=360, scrolling=False)
+    components.html(full_html, height=h, scrolling=False)
 
 
 # ─────────────────────────────────────────────
