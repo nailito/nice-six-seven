@@ -691,23 +691,28 @@ def render_calendrier(membres: list):
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ font-family: 'DM Sans', sans-serif; background: transparent; padding: 4px 0 0 0; }}
 
-  .cal-strip {{
-    display: grid;
-    grid-template-columns: repeat({n_days}, 1fr);
-    gap: 6px;
-  }}
 
-  .day-card {{
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 10px 6px;
+  .cal-strip {{
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    border: 1.5px solid #e2e8f0;
-    min-width: 0;
-    overflow: hidden;
-  }}
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    }}
+
+    .day-card {{
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        border: 1.5px solid #e2e8f0;
+        flex: 0 0 108px;
+        scroll-snap-align: start;
+    }}
+
   .day-card.weekend-bg {{
     background: #eff6ff;
     border-color: #bfdbfe;
