@@ -6,6 +6,14 @@ import requests
 from functools import lru_cache
 from streamlit_searchbox import st_searchbox
 from functools import lru_cache
+import base64
+
+@st.cache_data
+def get_base64_image(path: str) -> str:
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+bg_image = get_base64_image("assets/background.jpg")
 
 # ─────────────────────────────────────────────
 # CONFIG
