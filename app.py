@@ -2,18 +2,11 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, date, time as dtime, timedelta
 import time
+import base64
 import requests
 from functools import lru_cache
 from streamlit_searchbox import st_searchbox
 from functools import lru_cache
-import base64
-
-@st.cache_data
-def get_base64_image(path: str) -> str:
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
-
-bg_image = get_base64_image("assets/background.jpg")
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -93,6 +86,20 @@ def get_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase = get_supabase()
+
+
+# ─────────────────────────────────────────────
+# IMAGE DE FOND (encodée en base64)
+# ─────────────────────────────────────────────
+@st.cache_data
+def get_base64_image(path: str) -> str:
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+# ⚠️ Adapte le chemin ci-dessous à l'emplacement réel de ton image dans le repo
+# (ex. "assets/background.jpg"). Change aussi "jpeg" en "png" plus bas si besoin.
+BG_IMAGE_PATH = "assets/background.jpg"
+bg_image = get_base64_image(BG_IMAGE_PATH)
 
 
 # ─────────────────────────────────────────────
@@ -383,6 +390,19 @@ p, div, span, [data-testid="stWidgetLabel"] {
 [data-testid="stAppViewContainer"] { background: #f0f7ff; }
 [data-testid="stHeader"] { background: transparent; }
 .block-container { padding-top: 1rem !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Fond d'écran personnalisé (vient écraser le fond bleu ci-dessus) ──
+st.markdown(f"""
+<style>
+[data-testid="stAppViewContainer"] {{
+    background-image: url("data:image/jpeg;base64,{bg_image}") !important;
+    background-size: cover !important;
+    background-position: center center !important;
+    background-attachment: fixed !important;
+    background-repeat: no-repeat !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
