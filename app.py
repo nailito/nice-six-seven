@@ -96,9 +96,7 @@ def get_base64_image(path: str) -> str:
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-# ⚠️ Adapte le chemin ci-dessous à l'emplacement réel de ton image dans le repo
-# (ex. "assets/background.jpg"). Change aussi "jpeg" en "png" plus bas si besoin.
-BG_IMAGE_PATH = "assets/background.jpg"
+BG_IMAGE_PATH = "assets/background.jpeg"
 bg_image = get_base64_image(BG_IMAGE_PATH)
 
 
