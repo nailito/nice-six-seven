@@ -561,11 +561,21 @@ def compute_statut(membre: dict) -> str:
         h_dep = datetime.strptime(membre["heure_depart"], "%H:%M").time()
         h_arr = datetime.strptime(membre["heure_arrivee"], "%H:%M").time()
 
-        dt_arr = datetime.combine(date_arr, h_arr)
+        dt_arr = datetime.combine(
+            date_arr,
+            h_arr,
+            tzinfo=PARIS_TZ,
+        )
 
-        # ── FIX trajet de nuit : si h_dep > h_arr, le départ était la veille ──
         date_dep = date_arr - timedelta(days=1) if h_dep > h_arr else date_arr
-        dt_dep   = datetime.combine(date_dep, h_dep)
+        
+        dt_dep = datetime.combine(
+            date_dep,
+            h_dep,
+            tzinfo=PARIS_TZ,
+        )
+
+
 
     except Exception:
         return membre["statut"]
@@ -602,8 +612,15 @@ def format_countdown(membre: dict) -> str:
     try:
         date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() \
                    if membre.get("date_arrivee") else date.today()
-        target = datetime.combine(date_arr, datetime.strptime(membre["heure_arrivee"], "%H:%M").time())
-        delta = target - datetime.now()
+        
+        target = datetime.combine(
+            date_arr,
+            datetime.strptime(membre["heure_arrivee"], "%H:%M").time(),
+            tzinfo=PARIS_TZ,
+        )
+
+        delta = target - datetime.now(PARIS_TZ)
+        
         if delta.total_seconds() <= 0:
             return "maintenant"
         total_s = int(delta.total_seconds())
