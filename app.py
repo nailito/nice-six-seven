@@ -7,6 +7,9 @@ import requests
 from functools import lru_cache
 from streamlit_searchbox import st_searchbox
 from functools import lru_cache
+from zoneinfo import ZoneInfo
+
+PARIS_TZ = ZoneInfo("Europe/Paris")
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -551,7 +554,7 @@ def search_trains(from_id: str, to_id: str, dt_str: str) -> list[dict]:
 def compute_statut(membre: dict) -> str:
     if membre["statut"] == "arrive":
         return "arrive"
-    now = datetime.now()
+    now = datetime.now(PARIS_TZ)
     try:
         date_arr = datetime.strptime(membre["date_arrivee"], "%Y-%m-%d").date() \
                    if membre.get("date_arrivee") else now.date()
